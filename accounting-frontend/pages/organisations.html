@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organisations - AccuBooks</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: var(--primary-color); margin-bottom: 10px;">AccuBooks</h3>
+                <select id="organisationSelect" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="">Select Organisation</option>
+                </select>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html">📊 Dashboard</a></li>
+                <li><a href="gl-accounts.html">📖 GL Accounts</a></li>
+                <li><a href="daybook.html">📝 Daybook</a></li>
+                <li><a href="reports.html">📈 Reports</a></li>
+                <li><a href="customers.html">👥 Customers</a></li>
+                <li><a href="suppliers.html">🏢 Suppliers</a></li>
+                <li><a href="organisations.html" class="active">🏭 Organisations</a></li>
+                <li><hr style="margin: 15px 0;"></li>
+                <li><a href="#logout" id="logoutBtn">🚪 Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div class="dashboard-header">
+                <h1>Organisations</h1>
+                <p>Manage your business organizations</p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <button id="newOrgBtn" class="btn btn-primary">+ New Organisation</button>
+            </div>
+
+            <div id="orgFormContainer" style="display: none; margin-bottom: 30px; background: var(--light-bg); padding: 20px; border-radius: 8px;">
+                <h3>New Organisation</h3>
+                <form id="orgForm">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label>Organisation Name</label>
+                            <input type="text" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Registration Number</label>
+                            <input type="text" name="registrationNumber">
+                        </div>
+                        <div class="form-group">
+                            <label>Tax Number</label>
+                            <input type="text" name="taxNumber">
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" name="description">
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                        <button type="submit" class="btn btn-success">Create Organisation</button>
+                        <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="dashboard-grid">
+                <div id="organisationsContainer"></div>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { ApiService, UIUtils } from '../js/api.js';
+
+        if (!ApiService.isLoggedIn()) {
+            window.location.href = 'login.html';
+        }
+
+        const newOrgBtn = document.getElementById('newOrgBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const orgFormContainer = document.getElementById('orgFormContainer');
+        const orgForm = document.getElementById('orgForm');
+        const organisationsContainer = document.getElementById('organisationsContainer');
+
+        newOrgBtn.addEventListener('click', () => {
+            orgFormContainer.style.display = 'block';
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            orgFormContainer.style.display = 'none';
+            orgForm.reset();
+        });
+
+        async function loadOrganisations() {
+            UIUtils.showLoading();
+            const response = await ApiService.listOrganisations();
+            UIUtils.hideLoading();
+
+            if (response.ok) {
+                const orgs = response.data;
+                // populate select
+                const select = document.getElementById('organisationSelect');
+                select.innerHTML = '<option value="">Select Organisation</option>';
+                orgs.forEach(o => {
+                    const opt = document.createElement('option');
+                    opt.value = o.id;
+                    opt.textContent = o.name;
+                    select.appendChild(opt);
+                });
+                const saved = ApiService.getSelectedOrg();
+                if (saved) select.value = saved;
+
+                if (orgs.length === 0) {
+                    organisationsContainer.innerHTML = `
+                        <div class="card" style="grid-column: 1/-1;">
+                            <h3>No organisations yet</h3>
+                            <p>Create a new organisation using the form above.</p>
+                        </div>
+                    `;
+                } else {
+                    organisationsContainer.innerHTML = orgs.map(o => `
+                        <div class="card">
+                            <h3>${o.name}</h3>
+                            <p>${o.description || ''}</p>
+                        </div>
+                    `).join('');
+                }
+            } else {
+                organisationsContainer.innerHTML = `<p class="error">Unable to load organisations</p>`;
+            }
+        }
+
+        orgForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const formData = new FormData(orgForm);
+            const orgData = {
+                name: formData.get('name'),
+                registrationNumber: formData.get('registrationNumber'),
+                taxNumber: formData.get('taxNumber'),
+                description: formData.get('description')
+            };
+
+            UIUtils.showLoading();
+            const response = await ApiService.createOrganisation(
+                orgData.name,
+                orgData.description,
+                orgData.registrationNumber,
+                orgData.taxNumber
+            );
+            UIUtils.hideLoading();
+
+            if (response.ok) {
+                UIUtils.showAlert('Organisation created successfully!', 'success');
+                orgForm.reset();
+                orgFormContainer.style.display = 'none';
+                ApiService.setSelectedOrg(response.data.id);
+                document.getElementById('organisationSelect').value = response.data.id;
+                loadOrganisations();
+            } else {
+                UIUtils.showAlert(response.data?.message || 'Error creating organisation', 'error');
+            }
+        });
+
+        document.getElementById('organisationSelect').addEventListener('change', (e) => {
+            if (e.target.value) {
+                ApiService.setSelectedOrg(e.target.value);
+            }
+        });
+
+        const savedOrg = ApiService.getSelectedOrg();
+        if (savedOrg) {
+            document.getElementById('organisationSelect').value = savedOrg;
+        }
+        loadOrganisations();
+
+        document.getElementById('logoutBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            ApiService.logout();
+            window.location.href = 'login.html';
+        });
+    </script>
+</body>
+</html>

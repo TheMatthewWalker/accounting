@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports - AccuBooks</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: var(--primary-color); margin-bottom: 10px;">AccuBooks</h3>
+                <select id="organisationSelect" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="">Select Organisation</option>
+                </select>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html">📊 Dashboard</a></li>
+                <li><a href="gl-accounts.html">📖 GL Accounts</a></li>
+                <li><a href="daybook.html">📝 Daybook</a></li>
+                <li><a href="reports.html" class="active">📈 Reports</a></li>
+                <li><a href="customers.html">👥 Customers</a></li>
+                <li><a href="suppliers.html">🏢 Suppliers</a></li>
+                <li><a href="organisations.html">🏭 Organisations</a></li>
+                <li><hr style="margin: 15px 0;"></li>
+                <li><a href="#logout" id="logoutBtn">🚪 Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div class="dashboard-header">
+                <h1>Financial Reports</h1>
+                <p>View your financial statements</p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label>As of Date:</label>
+                <input type="date" id="reportDate" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); margin-right: 10px;">
+            </div>
+
+            <div class="dashboard-grid" style="margin-bottom: 30px;">
+                <button id="trialBalanceBtn" class="btn btn-primary" style="width: 100%; padding: 15px;">Trial Balance</button>
+                <button id="tAccountsBtn" class="btn btn-primary" style="width: 100%; padding: 15px;">T-Accounts</button>
+                <button id="glBtn" class="btn btn-primary" style="width: 100%; padding: 15px;">General Ledger</button>
+            </div>
+
+            <div id="reportContainer" class="table-container">
+                <p style="text-align: center; color: var(--secondary-color);">Select a report to view</p>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { ApiService, UIUtils } from '../js/api.js';
+
+        if (!ApiService.isLoggedIn()) {
+            window.location.href = 'login.html';
+        }
+
+        // Set today as default date
+        document.getElementById('reportDate').valueAsDate = new Date();
+
+        const reportContainer = document.getElementById('reportContainer');
+        const reportDate = document.getElementById('reportDate');
+
+        // Trial Balance Report
+        document.getElementById('trialBalanceBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) {
+                UIUtils.showAlert('Please select an organisation', 'error');
+                return;
+            }
+
+            UIUtils.showLoading();
+            const response = await ApiService.getTrialBalance(orgId, reportDate.value);
+            UIUtils.hideLoading();
+
+            if (response.ok) {
+                const report = response.data;
+                let html = `<h3>Trial Balance as of ${UIUtils.formatDate(report.asOfDate)}</h3>`;
+                html += `<table style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Account Name</th>
+                            <th>Type</th>
+                            <th style="text-align: right;">Debit</th>
+                            <th style="text-align: right;">Credit</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                
+                report.lines.forEach(line => {
+                    html += `<tr>
+                        <td>${line.code}</td>
+                        <td>${line.name}</td>
+                        <td>${line.type}</td>
+                        <td style="text-align: right;">${UIUtils.formatCurrency(line.debit)}</td>
+                        <td style="text-align: right;">${UIUtils.formatCurrency(line.credit)}</td>
+                    </tr>`;
+                });
+
+                html += `<tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                    <td colspan="3">Total</td>
+                    <td style="text-align: right;">${UIUtils.formatCurrency(report.totalDebits)}</td>
+                    <td style="text-align: right;">${UIUtils.formatCurrency(report.totalCredits)}</td>
+                </tr></tbody></table>`;
+
+                reportContainer.innerHTML = html;
+            } else {
+                UIUtils.showAlert('Error loading trial balance', 'error');
+            }
+        });
+
+        // T-Accounts Report
+        document.getElementById('tAccountsBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) {
+                UIUtils.showAlert('Please select an organisation', 'error');
+                return;
+            }
+
+            UIUtils.showLoading();
+            const response = await ApiService.getTAccounts(orgId, reportDate.value);
+            UIUtils.hideLoading();
+
+            if (response.ok) {
+                const accounts = response.data;
+                let html = '<h3>T-Accounts</h3>';
+
+                accounts.forEach(account => {
+                    html += `<div style="margin-bottom: 30px; border: 1px solid var(--border-color); padding: 15px; border-radius: 8px;">
+                        <h4>${account.code} - ${account.name}</h4>
+                        <table style="width: 100%;">
+                            <thead>
+                                <tr>
+                                    <th style="text-align: left;" colspan="2">Debit</th>
+                                    <th style="text-align: left;" colspan="2">Credit</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+                    
+                    account.entries.forEach(entry => {
+                        html += `<tr>
+                            <td>${entry.date ? UIUtils.formatDate(entry.date) : ''}</td>
+                            <td style="text-align: right;">${entry.debit ? UIUtils.formatCurrency(entry.debit) : ''}</td>
+                            <td>${entry.date ? UIUtils.formatDate(entry.date) : ''}</td>
+                            <td style="text-align: right;">${entry.credit ? UIUtils.formatCurrency(entry.credit) : ''}</td>
+                        </tr>`;
+                    });
+
+                    html += `<tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                        <td colspan="2" style="text-align: right;">Balance: ${UIUtils.formatCurrency(account.closingBalance)}</td>
+                        <td colspan="2"></td>
+                    </tr></tbody></table></div>`;
+                });
+
+                reportContainer.innerHTML = html;
+            } else {
+                UIUtils.showAlert('Error loading T-accounts', 'error');
+            }
+        });
+
+        // General Ledger Report
+        document.getElementById('glBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) {
+                UIUtils.showAlert('Please select an organisation', 'error');
+                return;
+            }
+
+            UIUtils.showLoading();
+            const response = await ApiService.getGeneralLedger(orgId, reportDate.value, reportDate.value);
+            UIUtils.hideLoading();
+
+            if (response.ok) {
+                const report = response.data;
+                let html = '<h3>General Ledger</h3>';
+                html += `<table style="width: 100%;">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Account Code</th>
+                            <th>Description</th>
+                            <th style="text-align: right;">Debit</th>
+                            <th style="text-align: right;">Credit</th>
+                            <th style="text-align: right;">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>`;
+                
+                report.entries.forEach(entry => {
+                    html += `<tr>
+                        <td>${UIUtils.formatDate(entry.date)}</td>
+                        <td>${entry.accountCode}</td>
+                        <td>${entry.description}</td>
+                        <td style="text-align: right;">${UIUtils.formatCurrency(entry.debit)}</td>
+                        <td style="text-align: right;">${UIUtils.formatCurrency(entry.credit)}</td>
+                        <td style="text-align: right;">${UIUtils.formatCurrency(entry.runningBalance)}</td>
+                    </tr>`;
+                });
+
+                html += '</tbody></table>';
+                reportContainer.innerHTML = html;
+            } else {
+                UIUtils.showAlert('Error loading general ledger', 'error');
+            }
+        });
+
+        // Organization selector
+        document.getElementById('organisationSelect').addEventListener('change', (e) => {
+            if (e.target.value) {
+                ApiService.setSelectedOrg(e.target.value);
+            }
+        });
+
+        const savedOrg = ApiService.getSelectedOrg();
+        if (savedOrg) {
+            document.getElementById('organisationSelect').value = savedOrg;
+        }
+
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            ApiService.logout();
+            window.location.href = 'login.html';
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daybook - AccuBooks</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: var(--primary-color); margin-bottom: 10px;">AccuBooks</h3>
+                <select id="organisationSelect" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="">Select Organisation</option>
+                </select>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html">📊 Dashboard</a></li>
+                <li><a href="gl-accounts.html">📖 GL Accounts</a></li>
+                <li><a href="daybook.html" class="active">📝 Daybook</a></li>
+                <li><a href="reports.html">📈 Reports</a></li>
+                <li><a href="customers.html">👥 Customers</a></li>
+                <li><a href="suppliers.html">🏢 Suppliers</a></li>
+                <li><a href="organisations.html">🏭 Organisations</a></li>
+                <li><hr style="margin: 15px 0;"></li>
+                <li><a href="#logout" id="logoutBtn">🚪 Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div class="dashboard-header">
+                <h1>Daybook Entries</h1>
+                <p>Record your business transactions</p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <button id="newEntryBtn" class="btn btn-primary">+ New Entry</button>
+            </div>
+
+            <div id="entryFormContainer" style="display: none; margin-bottom: 30px; background: var(--light-bg); padding: 20px; border-radius: 8px;">
+                <h3>New Daybook Entry</h3>
+                <form id="daybookForm">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label>Entry Type</label>
+                            <select name="type" required>
+                                <option value="">Select Type</option>
+                                <option value="Sales">Sales</option>
+                                <option value="Purchase">Purchase</option>
+                                <option value="Journal">Journal</option>
+                                <option value="Bank">Bank</option>
+                                <option value="Receipt">Receipt</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Reference Number</label>
+                            <input type="text" name="referenceNumber">
+                        </div>
+                        <div class="form-group">
+                            <label>Entry Date</label>
+                            <input type="date" name="entryDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" name="description">
+                        </div>
+                    </div>
+
+                    <h4 style="margin-top: 20px; margin-bottom: 15px;">Journal Lines</h4>
+                    <div id="journalLines" style="margin-bottom: 15px;"></div>
+                    <button type="button" id="addLineBtn" class="btn btn-secondary btn-sm" style="margin-bottom: 20px;">+ Add Line</button>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <button type="submit" class="btn btn-success">Create Entry</button>
+                        <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Reference</th>
+                            <th>Description</th>
+                            <th>Total Debit</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="entriesTable">
+                        <tr>
+                            <td colspan="7" style="text-align: center; color: var(--secondary-color);">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { ApiService, UIUtils } from '../js/api.js';
+
+        if (!ApiService.isLoggedIn()) {
+            window.location.href = 'login.html';
+        }
+
+        // UI Controls
+        const newEntryBtn = document.getElementById('newEntryBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const entryFormContainer = document.getElementById('entryFormContainer');
+        const daybookForm = document.getElementById('daybookForm');
+        const addLineBtn = document.getElementById('addLineBtn');
+        const journalLines = document.getElementById('journalLines');
+
+        let lineCount = 0;
+        let glAccounts = [];
+
+        newEntryBtn.addEventListener('click', () => {
+            entryFormContainer.style.display = 'block';
+            daybookForm.reset();
+            journalLines.innerHTML = '';
+            lineCount = 0;
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            entryFormContainer.style.display = 'none';
+        });
+
+        // Add journal line
+        addLineBtn.addEventListener('click', () => {
+            const accountOptions = glAccounts.map(acc => `<option value="${acc.id}">${acc.code} - ${acc.name}</option>`).join('');
+            const lineHtml = `
+                <div class="journal-line" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px; align-items: flex-end;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>GL Account</label>
+                        <select name="glAccounts[${lineCount}]" required>
+                            <option value="">Select Account</option>
+                            ${accountOptions}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>Debit</label>
+                        <input type="number" name="debits[${lineCount}]" step="0.01" value="0">
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label>Credit</label>
+                        <input type="number" name="credits[${lineCount}]" step="0.01" value="0">
+                    </div>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="removeLine(${lineCount})">Remove</button>
+                </div>
+            `;
+            journalLines.insertAdjacentHTML('beforeend', lineHtml);
+            lineCount++;
+        });
+
+        window.removeLine = (index) => {
+            document.querySelector(`[onclick="removeLine(${index})"]`).parentElement.remove();
+        };
+
+        // Load entries
+        async function loadEntries() {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) return;
+
+            try {
+                // Load GL Accounts for dropdown
+                const accountsResponse = await ApiService.getGLAccounts(orgId);
+                if (accountsResponse.ok) {
+                    glAccounts = accountsResponse.data;
+                }
+
+                const response = await ApiService.getDaybookEntries(orgId);
+                if (response.ok) {
+                    const entries = response.data;
+                    if (entries.length === 0) {
+                        document.getElementById('entriesTable').innerHTML = '<tr><td colspan="7" style="text-align: center;">No entries yet</td></tr>';
+                    } else {
+                        document.getElementById('entriesTable').innerHTML = entries.map(entry => {
+                            const totalDebit = entry.lines.reduce((sum, line) => sum + line.debitAmount, 0);
+                            return `
+                                <tr>
+                                    <td>${UIUtils.formatDate(entry.entryDate)}</td>
+                                    <td>${entry.type}</td>
+                                    <td>${entry.referenceNumber || '-'}</td>
+                                    <td>${entry.description || '-'}</td>
+                                    <td>${UIUtils.formatCurrency(totalDebit)}</td>
+                                    <td>${entry.isPosted ? '<span style="color: var(--success-color);">✓ Posted</span>' : '<span style="color: var(--warning-color);">⏳ Pending</span>'}</td>
+                                    <td>
+                                        <div class="action-buttons">
+                                            <a href="#${entry.id}" class="btn btn-sm btn-primary">View</a>
+                                            ${!entry.isPosted ? `<button class="btn btn-sm btn-success" onclick="postEntry('${entry.id}')">Post</button>` : ''}
+                                            ${!entry.isPosted ? `<button class="btn btn-sm btn-danger" onclick="deleteEntry('${entry.id}')">Delete</button>` : ''}
+                                        </div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('');
+                    }
+                }
+            } catch (error) {
+                UIUtils.showAlert('Error loading entries', 'error');
+            }
+        }
+
+        // Create entry
+        daybookForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) {
+                UIUtils.showAlert('Please select an organisation', 'error');
+                return;
+            }
+
+            // Collect journal lines
+            const lines = [];
+            document.querySelectorAll('.journal-line').forEach(lineDiv => {
+                const select = lineDiv.querySelector('select');
+                const debit = parseFloat(lineDiv.querySelector('input[name^="debits"]').value);
+                const credit = parseFloat(lineDiv.querySelector('input[name^="credits"]').value);
+                if (select.value) {
+                    lines.push({
+                        glAccountId: select.value,
+                        debitAmount: debit,
+                        creditAmount: credit
+                    });
+                }
+            });
+
+            const entryData = {
+                type: daybookForm.querySelector('select[name="type"]').value,
+                referenceNumber: daybookForm.querySelector('input[name="referenceNumber"]').value,
+                entryDate: daybookForm.querySelector('input[name="entryDate"]').value,
+                description: daybookForm.querySelector('input[name="description"]').value,
+                lines: lines
+            };
+
+            // Validate debits = credits
+            const totalDebits = lines.reduce((sum, line) => sum + line.debitAmount, 0);
+            const totalCredits = lines.reduce((sum, line) => sum + line.creditAmount, 0);
+
+            if (Math.abs(totalDebits - totalCredits) > 0.01) {
+                UIUtils.showAlert('Debits must equal Credits!', 'error');
+                return;
+            }
+
+            UIUtils.showLoading();
+            const response = await ApiService.createDaybookEntry(orgId, entryData);
+            UIUtils.hideLoading();
+
+            if (response.ok) {
+                UIUtils.showAlert('Entry created successfully!', 'success');
+                entryFormContainer.style.display = 'none';
+                loadEntries();
+            } else {
+                UIUtils.showAlert(response.data?.message || 'Error creating entry', 'error');
+            }
+        });
+
+        window.postEntry = async (entryId) => {
+            const orgId = ApiService.getSelectedOrg();
+            const response = await ApiService.postDaybookEntry(orgId, entryId);
+            if (response.ok) {
+                UIUtils.showAlert('Entry posted successfully', 'success');
+                loadEntries();
+            } else {
+                UIUtils.showAlert('Error posting entry', 'error');
+            }
+        };
+
+        window.deleteEntry = async (entryId) => {
+            if (confirm('Delete this entry?')) {
+                const orgId = ApiService.getSelectedOrg();
+                const response = await ApiService.deleteDaybookEntry(orgId, entryId);
+                if (response.ok) {
+                    UIUtils.showAlert('Entry deleted', 'success');
+                    loadEntries();
+                }
+            }
+        };
+
+        // Organization selector
+        document.getElementById('organisationSelect').addEventListener('change', (e) => {
+            if (e.target.value) {
+                ApiService.setSelectedOrg(e.target.value);
+                loadEntries();
+            }
+        });
+
+        const savedOrg = ApiService.getSelectedOrg();
+        if (savedOrg) {
+            document.getElementById('organisationSelect').value = savedOrg;
+        }
+        loadEntries();
+    </script>
+</body>
+</html>

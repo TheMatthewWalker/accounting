@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GL Accounts - AccuBooks</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: var(--primary-color); margin-bottom: 10px;">AccuBooks</h3>
+                <select id="organisationSelect" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="">Select Organisation</option>
+                </select>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html">📊 Dashboard</a></li>
+                <li><a href="gl-accounts.html" class="active">📖 GL Accounts</a></li>
+                <li><a href="daybook.html">📝 Daybook</a></li>
+                <li><a href="reports.html">📈 Reports</a></li>
+                <li><a href="customers.html">👥 Customers</a></li>
+                <li><a href="suppliers.html">🏢 Suppliers</a></li>
+                <li><a href="organisations.html">🏭 Organisations</a></li>
+                <li><hr style="margin: 15px 0;"></li>
+                <li><a href="#logout" id="logoutBtn">🚪 Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div class="dashboard-header">
+                <h1>General Ledger Accounts</h1>
+                <p>Manage your chart of accounts</p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <button id="newAccountBtn" class="btn btn-primary">+ New Account</button>
+            </div>
+
+            <div id="accountFormContainer" style="display: none; margin-bottom: 30px; background: var(--light-bg); padding: 20px; border-radius: 8px;">
+                <h3>New GL Account</h3>
+                <form id="accountForm">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label>Account Code</label>
+                            <input type="text" name="code" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Account Name</label>
+                            <input type="text" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Account Type</label>
+                            <select name="type" required>
+                                <option value="">Select Type</option>
+                                <option value="Asset">Asset</option>
+                                <option value="Liability">Liability</option>
+                                <option value="Equity">Equity</option>
+                                <option value="Revenue">Revenue</option>
+                                <option value="Expense">Expense</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Sub Type</label>
+                            <input type="text" name="subType" placeholder="e.g., Current Asset">
+                        </div>
+                        <div class="form-group">
+                            <label>Opening Balance</label>
+                            <input type="number" name="openingBalance" step="0.01" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" name="description">
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+                        <button type="submit" class="btn btn-success">Create Account</button>
+                        <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Sub Type</th>
+                            <th>Balance</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accountsTable">
+                        <tr>
+                            <td colspan="7" style="text-align: center; color: var(--secondary-color);">Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { ApiService, UIUtils } from '../js/api.js';
+
+        if (!ApiService.isLoggedIn()) {
+            window.location.href = 'login.html';
+        }
+
+        // UI Controls
+        const newAccountBtn = document.getElementById('newAccountBtn');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const accountFormContainer = document.getElementById('accountFormContainer');
+        const accountForm = document.getElementById('accountForm');
+        const accountsTable = document.getElementById('accountsTable');
+
+        newAccountBtn.addEventListener('click', () => {
+            accountFormContainer.style.display = 'block';
+        });
+
+        cancelBtn.addEventListener('click', () => {
+            accountFormContainer.style.display = 'none';
+            accountForm.reset();
+        });
+
+        // Load accounts
+        async function loadAccounts() {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) return;
+
+            try {
+                const response = await ApiService.getGLAccounts(orgId);
+                if (response.ok) {
+                    const accounts = response.data;
+                    if (accounts.length === 0) {
+                        accountsTable.innerHTML = '<tr><td colspan="7" style="text-align: center;">No accounts yet</td></tr>';
+                    } else {
+                        accountsTable.innerHTML = accounts.map(account => `
+                            <tr>
+                                <td>${account.code}</td>
+                                <td>${account.name}</td>
+                                <td>${account.type}</td>
+                                <td>${account.subType || '-'}</td>
+                                <td>${UIUtils.formatCurrency(account.balance)}</td>
+                                <td>${account.isActive ? '<span style="color: var(--success-color);">✓ Active</span>' : '<span style="color: var(--danger-color);">✗ Inactive</span>'}</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-primary" onclick="editAccount('${account.id}')">Edit</button>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteAccount('${account.id}')">Delete</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+            } catch (error) {
+                UIUtils.showAlert('Error loading accounts', 'error');
+            }
+        }
+
+        // Create account
+        accountForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) {
+                UIUtils.showAlert('Please select an organisation', 'error');
+                return;
+            }
+
+            const formData = new FormData(accountForm);
+            const accountData = {
+                code: formData.get('code'),
+                name: formData.get('name'),
+                type: formData.get('type'),
+                subType: formData.get('subType'),
+                openingBalance: parseFloat(formData.get('openingBalance')),
+                description: formData.get('description')
+            };
+
+            UIUtils.showLoading();
+            const response = await ApiService.createGLAccount(orgId, accountData);
+            UIUtils.hideLoading();
+
+            if (response.ok) {
+                UIUtils.showAlert('Account created successfully!', 'success');
+                accountForm.reset();
+                accountFormContainer.style.display = 'none';
+                loadAccounts();
+            } else {
+                UIUtils.showAlert(response.data?.message || 'Error creating account', 'error');
+            }
+        });
+
+        // Global functions for inline onclick handlers
+        window.editAccount = async (accountId) => {
+            UIUtils.showAlert('Edit functionality coming soon', 'info');
+        };
+
+        window.deleteAccount = async (accountId) => {
+            if (confirm('Are you sure you want to delete this account?')) {
+                const orgId = ApiService.getSelectedOrg();
+                const response = await ApiService.deleteGLAccount(orgId, accountId);
+                if (response.ok) {
+                    UIUtils.showAlert('Account deleted successfully', 'success');
+                    loadAccounts();
+                } else {
+                    UIUtils.showAlert('Error deleting account', 'error');
+                }
+            }
+        };
+
+        // Organization selector
+        document.getElementById('organisationSelect').addEventListener('change', (e) => {
+            if (e.target.value) {
+                ApiService.setSelectedOrg(e.target.value);
+                loadAccounts();
+            }
+        });
+
+        const savedOrg = ApiService.getSelectedOrg();
+        if (savedOrg) {
+            document.getElementById('organisationSelect').value = savedOrg;
+        }
+        loadAccounts();
+    </script>
+</body>
+</html>

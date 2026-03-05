@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - AccuBooks</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: var(--primary-color); margin-bottom: 10px;">AccuBooks</h3>
+                <select id="organisationSelect" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="">Select Organisation</option>
+                </select>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html" class="active">📊 Dashboard</a></li>
+                <li><a href="gl-accounts.html">📖 GL Accounts</a></li>
+                <li><a href="daybook.html">📝 Daybook</a></li>
+                <li><a href="reports.html">📈 Reports</a></li>
+                <li><a href="customers.html">👥 Customers</a></li>
+                <li><a href="suppliers.html">🏢 Suppliers</a></li>
+                <li><a href="organisations.html">🏭 Organisations</a></li>
+                <li><hr style="margin: 15px 0;"></li>
+                <li><a href="#logout" id="logoutBtn">🚪 Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div class="dashboard-header">
+                <h1>Dashboard</h1>
+                <p>Welcome, <span id="userName">User</span>!</p>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="card accent">
+                    <h3>Total Accounts</h3>
+                    <div class="value" id="totalAccounts">0</div>
+                </div>
+                <div class="card">
+                    <h3>Total Assets</h3>
+                    <div class="value" id="totalAssets">$0</div>
+                </div>
+                <div class="card">
+                    <h3>Total Liabilities</h3>
+                    <div class="value" id="totalLiabilities">$0</div>
+                </div>
+                <div class="card">
+                    <h3>Pending Daybook Entries</h3>
+                    <div class="value" id="pendingEntries">0</div>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <h3>Recent Daybook Entries</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Type</th>
+                            <th>Reference</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentEntriesTable">
+                        <tr>
+                            <td colspan="6" style="text-align: center; color: var(--secondary-color);">No entries yet</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { ApiService, UIUtils } from '../js/api.js';
+
+        // Check authentication
+        if (!ApiService.isLoggedIn()) {
+            window.location.href = 'login.html';
+        }
+
+        // Set user name
+        const user = ApiService.getCurrentUser();
+        document.getElementById('userName').textContent = user?.email || 'User';
+
+        // Logout
+        document.getElementById('logoutBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            ApiService.logout();
+            window.location.href = 'login.html';
+        });
+
+        // Load dashboard data
+        async function loadDashboard() {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) {
+                document.querySelector('.dashboard-grid').innerHTML = '<p style="grid-column: 1/-1;">Please select an organisation</p>';
+                return;
+            }
+
+            try {
+                // Load GL Accounts
+                const accountsResponse = await ApiService.getGLAccounts(orgId);
+                if (accountsResponse.ok) {
+                    const accounts = accountsResponse.data;
+                    document.getElementById('totalAccounts').textContent = accounts.length;
+
+                    let totalAssets = 0;
+                    let totalLiabilities = 0;
+
+                    accounts.forEach(account => {
+                        if (account.type === 'Asset') {
+                            totalAssets += account.balance;
+                        } else if (account.type === 'Liability') {
+                            totalLiabilities += account.balance;
+                        }
+                    });
+
+                    document.getElementById('totalAssets').textContent = UIUtils.formatCurrency(totalAssets);
+                    document.getElementById('totalLiabilities').textContent = UIUtils.formatCurrency(totalLiabilities);
+                }
+
+                // Load Daybook Entries
+                const entriesResponse = await ApiService.getDaybookEntries(orgId);
+                if (entriesResponse.ok) {
+                    const entries = entriesResponse.data;
+                    const pendingCount = entries.filter(e => !e.isPosted).length;
+                    document.getElementById('pendingEntries').textContent = pendingCount;
+
+                    // Show recent entries
+                    const recentEntries = entries.slice(0, 5);
+                    const tableBody = document.getElementById('recentEntriesTable');
+                    if (recentEntries.length > 0) {
+                        tableBody.innerHTML = recentEntries.map(entry => `
+                            <tr>
+                                <td>${UIUtils.formatDate(entry.entryDate)}</td>
+                                <td>${entry.type}</td>
+                                <td>${entry.referenceNumber || '-'}</td>
+                                <td>${entry.description || '-'}</td>
+                                <td>${entry.isPosted ? '<span style="color: var(--success-color);">✓ Posted</span>' : '<span style="color: var(--warning-color);">⏳ Pending</span>'}</td>
+                                <td><a href="daybook.html#${entry.id}" class="btn btn-sm btn-primary">View</a></td>
+                            </tr>
+                        `).join('');
+                    }
+                }
+            } catch (error) {
+                UIUtils.showAlert('Error loading dashboard data', 'error');
+            }
+        }
+
+        // Organization selector
+        document.getElementById('organisationSelect').addEventListener('change', (e) => {
+            if (e.target.value) {
+                ApiService.setSelectedOrg(e.target.value);
+                loadDashboard();
+            }
+        });
+
+        // Load initial data
+        const savedOrg = ApiService.getSelectedOrg();
+        if (savedOrg) {
+            document.getElementById('organisationSelect').value = savedOrg;
+        }
+        loadDashboard();
+    </script>
+</body>
+</html>

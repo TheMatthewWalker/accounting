@@ -1,0 +1,67 @@
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# NuGet packages
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# .NET runtime / publish
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+publish/
+
+# Logs
+logs/
+*.log
+
+# User-specific files
+*.rsuser
+*.user
+*.suo
+*.userosscache
+
+# Visual Studio / Rider / VS Code
+.vs/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment / secrets
+.env
+.env.*
+*.pfx
+*.p12
+secrets.json
+appsettings.Local.json
+
+# Temporary Claude Code working files
+tmpclaude-*
+
+# Test results and coverage
+TestResults/
+*.coverage
+*.coveragexml
+coverage/
+*.trx
+
+# Entity Framework migrations snapshots are kept, but not the tool output
+# (migrations themselves should be committed)
+
+# Frontend
+accounting-frontend/node_modules/
+
+# .claude session directory (local only)
+.claude/

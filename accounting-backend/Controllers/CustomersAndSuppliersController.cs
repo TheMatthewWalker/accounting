@@ -1,0 +1,101 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using AccountingApp.Services;
+
+namespace AccountingApp.Controllers;
+
+[Authorize]
+[ApiController]
+[Route("api/organisations/{organisationId}/[controller]")]
+public class CustomersController : ControllerBase
+{
+    private readonly ICustomerSupplierService _service;
+
+    public CustomersController(ICustomerSupplierService service)
+    {
+        _service = service;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateCustomer(Guid organisationId, [FromBody] CreateCustomerRequest request)
+    {
+        var result = await _service.CreateCustomerAsync(organisationId, request);
+        return CreatedAtAction(nameof(GetCustomer), new { organisationId, customerId = result.Id }, result);
+    }
+
+    [HttpGet("{customerId}")]
+    public async Task<IActionResult> GetCustomer(Guid organisationId, Guid customerId)
+    {
+        var customer = await _service.GetCustomerAsync(customerId);
+        return Ok(customer);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetCustomers(Guid organisationId)
+    {
+        var customers = await _service.GetCustomersByOrganisationAsync(organisationId);
+        return Ok(customers);
+    }
+
+    [HttpPut("{customerId}")]
+    public async Task<IActionResult> UpdateCustomer(Guid organisationId, Guid customerId, [FromBody] UpdateCustomerRequest request)
+    {
+        var result = await _service.UpdateCustomerAsync(customerId, request);
+        return Ok(result);
+    }
+
+    [HttpDelete("{customerId}")]
+    public async Task<IActionResult> DeleteCustomer(Guid organisationId, Guid customerId)
+    {
+        await _service.DeleteCustomerAsync(customerId);
+        return NoContent();
+    }
+}
+
+[Authorize]
+[ApiController]
+[Route("api/organisations/{organisationId}/[controller]")]
+public class SuppliersController : ControllerBase
+{
+    private readonly ICustomerSupplierService _service;
+
+    public SuppliersController(ICustomerSupplierService service)
+    {
+        _service = service;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateSupplier(Guid organisationId, [FromBody] CreateSupplierRequest request)
+    {
+        var result = await _service.CreateSupplierAsync(organisationId, request);
+        return CreatedAtAction(nameof(GetSupplier), new { organisationId, supplierId = result.Id }, result);
+    }
+
+    [HttpGet("{supplierId}")]
+    public async Task<IActionResult> GetSupplier(Guid organisationId, Guid supplierId)
+    {
+        var supplier = await _service.GetSupplierAsync(supplierId);
+        return Ok(supplier);
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> GetSuppliers(Guid organisationId)
+    {
+        var suppliers = await _service.GetSuppliersByOrganisationAsync(organisationId);
+        return Ok(suppliers);
+    }
+
+    [HttpPut("{supplierId}")]
+    public async Task<IActionResult> UpdateSupplier(Guid organisationId, Guid supplierId, [FromBody] UpdateSupplierRequest request)
+    {
+        var result = await _service.UpdateSupplierAsync(supplierId, request);
+        return Ok(result);
+    }
+
+    [HttpDelete("{supplierId}")]
+    public async Task<IActionResult> DeleteSupplier(Guid organisationId, Guid supplierId)
+    {
+        await _service.DeleteSupplierAsync(supplierId);
+        return NoContent();
+    }
+}
