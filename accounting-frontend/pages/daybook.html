@@ -257,7 +257,7 @@
                 entryFormContainer.style.display = 'none';
                 loadEntries();
             } else {
-                UIUtils.showAlert(response.data?.message || 'Error creating entry', 'error');
+                UIUtils.showAlert(response.data?.error?.message || 'Error creating entry', 'error');
             }
         });
 

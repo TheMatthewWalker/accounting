@@ -192,7 +192,7 @@
                 accountFormContainer.style.display = 'none';
                 loadAccounts();
             } else {
-                UIUtils.showAlert(response.data?.message || 'Error creating account', 'error');
+                UIUtils.showAlert(response.data?.error?.message || 'Error creating account', 'error');
             }
         });
 
