@@ -282,6 +282,24 @@ class ApiService {
         return localStorage.getItem(ORG_KEY);
     }
 
+    static async populateOrganisationSelector() {
+        const response = await this.listOrganisations();
+        if (response.ok) {
+            const orgs = response.data;
+            const select = document.getElementById('organisationSelect');
+            select.innerHTML = '<option value="">Select Organisation</option>';
+            orgs.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.id;
+                opt.textContent = o.name;
+                select.appendChild(opt);
+            });
+            const saved = this.getSelectedOrg();
+            if (saved) select.value = saved;
+        }
+        return response;
+    }
+
     static getCurrentUser() {
         const user = localStorage.getItem(USER_KEY);
         return user ? JSON.parse(user) : null;

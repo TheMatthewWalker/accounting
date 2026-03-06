@@ -291,10 +291,7 @@
             }
         });
 
-        const savedOrg = ApiService.getSelectedOrg();
-        if (savedOrg) {
-            document.getElementById('organisationSelect').value = savedOrg;
-        }
+        await ApiService.populateOrganisationSelector();
         loadEntries();
     </script>
 </body>

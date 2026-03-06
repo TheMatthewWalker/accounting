@@ -222,10 +222,7 @@
             }
         });
 
-        const savedOrg = ApiService.getSelectedOrg();
-        if (savedOrg) {
-            document.getElementById('organisationSelect').value = savedOrg;
-        }
+        await ApiService.populateOrganisationSelector();
         loadAccounts();
     </script>
 </body>
