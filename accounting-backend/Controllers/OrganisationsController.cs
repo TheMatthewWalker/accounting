@@ -29,6 +29,27 @@ public class OrganisationsController : ControllerBase
             return Forbid();
         }
 
+        if (!string.IsNullOrWhiteSpace(request.RegistrationNumber))
+        {
+            var existingOrg = await _context.Organisations
+                .Where(o => o.RegistrationNumber == request.RegistrationNumber && o.IsActive)
+                .FirstOrDefaultAsync();
+
+            if (existingOrg != null)
+            {
+                var ownerEmail = await _context.OrganisationMembers
+                    .Where(m => m.OrganisationId == existingOrg.Id && m.Role == "Owner" && m.IsActive)
+                    .Select(m => m.User!.Email)
+                    .FirstOrDefaultAsync();
+
+                var message = ownerEmail != null
+                    ? $"An organisation with registration number '{request.RegistrationNumber}' already exists. To request access, contact the owner at {ownerEmail}."
+                    : $"An organisation with registration number '{request.RegistrationNumber}' already exists.";
+
+                throw new DuplicateResourceException(message);
+            }
+        }
+
         var org = new Organisation
         {
             Id = Guid.NewGuid(),

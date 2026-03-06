@@ -161,7 +161,7 @@
                 document.getElementById('organisationSelect').value = response.data.id;
                 loadOrganisations();
             } else {
-                UIUtils.showAlert(response.data?.message || 'Error creating organisation', 'error');
+                UIUtils.showAlert(response.data?.error?.message || 'Error creating organisation', 'error');
             }
         });
 
