@@ -239,7 +239,8 @@
             {
                 group: 'Assets',
                 accounts: [
-                    { code: '1000', name: 'Cash and Cash Equivalents',   type: 'Asset',   subType: 'Current Asset',    description: 'Cash on hand and in bank accounts' },
+                    { code: '1000', name: 'Bank Account',                 type: 'Asset',   subType: 'Current Asset',    description: 'Main business bank account' },
+                    { code: '1010', name: 'Petty Cash',                  type: 'Asset',   subType: 'Current Asset',    description: 'Cash on hand for small day-to-day expenses' },
                     { code: '1100', name: 'Trade Receivables',           type: 'Asset',   subType: 'Current Asset',    description: 'Amounts owed by customers' },
                     { code: '1150', name: 'Allowance for Doubtful Debts',type: 'Asset',   subType: 'Current Asset',    description: 'Provision for uncollectable receivables' },
                     { code: '1200', name: 'Inventory',                   type: 'Asset',   subType: 'Current Asset',    description: 'Goods held for sale' },
@@ -272,6 +273,7 @@
                 accounts: [
                     { code: '4000', name: 'Sales Revenue',               type: 'Revenue', subType: 'Trading Income',    description: 'Income from sale of goods or services' },
                     { code: '4010', name: 'Sales Returns & Allowances',  type: 'Revenue', subType: 'Trading Income',    description: 'Contra account for returned or discounted sales' },
+                    { code: '4050', name: 'Discounts Received',          type: 'Revenue', subType: 'Trading Income',    description: 'Settlement discounts received from suppliers' },
                     { code: '4100', name: 'Other Income',                type: 'Revenue', subType: 'Other Income',      description: 'Miscellaneous income not from core trading' },
                     { code: '4200', name: 'Interest Income',             type: 'Revenue', subType: 'Other Income',      description: 'Interest earned on deposits and loans' },
                 ]
@@ -281,6 +283,7 @@
                 accounts: [
                     { code: '5000', name: 'Purchases',                   type: 'Expense', subType: 'Cost of Sales',     description: 'Cost of goods purchased for resale' },
                     { code: '5010', name: 'Purchase Returns & Allowances',type:'Expense', subType: 'Cost of Sales',     description: 'Contra account for returned or discounted purchases' },
+                    { code: '5050', name: 'Discounts Allowed',           type: 'Expense', subType: 'Cost of Sales',     description: 'Settlement discounts granted to customers' },
                     { code: '5100', name: 'Direct Labour',               type: 'Expense', subType: 'Cost of Sales',     description: 'Wages directly attributable to production' },
                     { code: '5200', name: 'Freight & Carriage In',       type: 'Expense', subType: 'Cost of Sales',     description: 'Delivery costs on incoming goods' },
                     { code: '6000', name: 'Salaries & Wages',            type: 'Expense', subType: 'Operating Expense', description: 'Employee remuneration' },
