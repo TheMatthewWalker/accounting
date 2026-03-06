@@ -50,12 +50,9 @@
             UIUtils.hideLoading();
 
             if (response.ok) {
-                UIUtils.showAlert('Login successful!', 'success');
-                setTimeout(() => {
-                    window.location.href = 'dashboard.html';
-                }, 1500);
+                window.location.href = 'dashboard.html';
             } else {
-                UIUtils.showAlert(response.data?.message || 'Login failed', 'error');
+                UIUtils.showAlert(response.data?.error?.message || 'Login failed. Please try again.', 'error');
             }
         });
     </script>
