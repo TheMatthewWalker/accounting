@@ -123,6 +123,8 @@ public interface IReportService
     Task<IEnumerable<TAccountResponse>> GetTAccountsAsync(Guid organisationId, DateTime asOfDate);
     Task<TAccountResponse> GetTAccountAsync(Guid accountId, DateTime asOfDate);
     Task<GeneralLedgerResponse> GetGeneralLedgerAsync(Guid organisationId, DateTime fromDate, DateTime toDate);
+    Task<ProfitAndLossResponse> GetProfitAndLossAsync(Guid organisationId, DateTime fromDate, DateTime toDate);
+    Task<BalanceSheetResponse> GetBalanceSheetAsync(Guid organisationId, DateTime asOfDate);
 }
 
 public class TrialBalanceResponse
@@ -176,6 +178,47 @@ public class GLEntryResponse
     public decimal Debit { get; set; }
     public decimal Credit { get; set; }
     public decimal RunningBalance { get; set; }
+}
+
+public class ProfitAndLossResponse
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public List<PnLLineResponse> Revenue { get; set; } = new();
+    public List<PnLLineResponse> CostOfSales { get; set; } = new();
+    public decimal GrossProfit { get; set; }
+    public List<PnLLineResponse> OperatingExpenses { get; set; } = new();
+    public List<PnLLineResponse> FinanceCosts { get; set; } = new();
+    public decimal NetProfit { get; set; }
+}
+
+public class PnLLineResponse
+{
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string SubType { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+}
+
+public class BalanceSheetResponse
+{
+    public DateTime AsOfDate { get; set; }
+    public List<BalanceSheetLineResponse> CurrentAssets { get; set; } = new();
+    public List<BalanceSheetLineResponse> NonCurrentAssets { get; set; } = new();
+    public decimal TotalAssets { get; set; }
+    public List<BalanceSheetLineResponse> CurrentLiabilities { get; set; } = new();
+    public List<BalanceSheetLineResponse> NonCurrentLiabilities { get; set; } = new();
+    public decimal TotalLiabilities { get; set; }
+    public List<BalanceSheetLineResponse> Equity { get; set; } = new();
+    public decimal CurrentYearProfit { get; set; }
+    public decimal TotalEquity { get; set; }
+}
+
+public class BalanceSheetLineResponse
+{
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
 }
 
 public interface ICustomerSupplierService

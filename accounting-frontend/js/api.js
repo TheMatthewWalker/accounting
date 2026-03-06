@@ -209,6 +209,18 @@ class ApiService {
         );
     }
 
+    static async getProfitAndLoss(organisationId, fromDate, toDate) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/reports/profit-and-loss?fromDate=${fromDate}&toDate=${toDate}`
+        );
+    }
+
+    static async getBalanceSheet(organisationId, asOfDate = null) {
+        let url = `${API_BASE_URL}/organisations/${organisationId}/reports/balance-sheet`;
+        if (asOfDate) url += `?asOfDate=${asOfDate}`;
+        return this.request(url);
+    }
+
     // Customer Endpoints
     static async createCustomer(organisationId, customer) {
         return this.request(

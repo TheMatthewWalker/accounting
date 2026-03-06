@@ -34,15 +34,23 @@
                 <p>View your financial statements</p>
             </div>
 
-            <div style="margin-bottom: 20px;">
-                <label>As of Date:</label>
-                <input type="date" id="reportDate" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); margin-right: 10px;">
+            <div style="margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;">
+                <div>
+                    <label style="display: block; margin-bottom: 4px; font-size: 0.9em; color: var(--secondary-color);">From Date</label>
+                    <input type="date" id="fromDate" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+                </div>
+                <div>
+                    <label style="display: block; margin-bottom: 4px; font-size: 0.9em; color: var(--secondary-color);">To / As of Date</label>
+                    <input type="date" id="reportDate" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+                </div>
             </div>
 
             <div class="dashboard-grid" style="margin-bottom: 30px;">
-                <button id="trialBalanceBtn" class="btn btn-primary" style="width: 100%; padding: 15px;">Trial Balance</button>
-                <button id="tAccountsBtn" class="btn btn-primary" style="width: 100%; padding: 15px;">T-Accounts</button>
-                <button id="glBtn" class="btn btn-primary" style="width: 100%; padding: 15px;">General Ledger</button>
+                <button id="plBtn" class="btn btn-primary" style="width: 100%; padding: 15px;">📊 Profit & Loss</button>
+                <button id="bsBtn" class="btn btn-primary" style="width: 100%; padding: 15px;">🏦 Balance Sheet</button>
+                <button id="trialBalanceBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">Trial Balance</button>
+                <button id="tAccountsBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">T-Accounts</button>
+                <button id="glBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">General Ledger</button>
             </div>
 
             <div id="reportContainer" class="table-container">
@@ -58,11 +66,156 @@
             window.location.href = 'login.html';
         }
 
-        // Set today as default date
-        document.getElementById('reportDate').valueAsDate = new Date();
+        // Set default dates: from = first day of current year, to = today
+        const today = new Date();
+        const firstOfYear = new Date(today.getFullYear(), 0, 1);
+        document.getElementById('reportDate').valueAsDate = today;
+        document.getElementById('fromDate').valueAsDate = firstOfYear;
 
         const reportContainer = document.getElementById('reportContainer');
         const reportDate = document.getElementById('reportDate');
+        const fromDate = document.getElementById('fromDate');
+
+        // ── Helpers ──────────────────────────────────────────────────────────────
+
+        function sectionRows(lines) {
+            return lines.map(l => `
+                <tr>
+                    <td style="padding-left: 24px;">${l.code}</td>
+                    <td style="padding-left: 24px;">${l.name}</td>
+                    <td style="text-align: right;">${UIUtils.formatCurrency(l.amount)}</td>
+                </tr>`).join('');
+        }
+
+        function subtotalRow(label, amount, topBorder = false) {
+            const border = topBorder ? 'border-top: 1px solid var(--border-color);' : '';
+            return `<tr style="${border}">
+                <td colspan="2" style="font-weight: 600; padding-left: 8px;">${label}</td>
+                <td style="text-align: right; font-weight: 600;">${UIUtils.formatCurrency(amount)}</td>
+            </tr>`;
+        }
+
+        function totalRow(label, amount) {
+            return `<tr style="border-top: 2px solid var(--border-color); border-bottom: 3px double var(--border-color);">
+                <td colspan="2" style="font-weight: 700; padding-left: 8px;">${label}</td>
+                <td style="text-align: right; font-weight: 700;">${UIUtils.formatCurrency(amount)}</td>
+            </tr>`;
+        }
+
+        function sectionHeader(title) {
+            return `<tr style="background: var(--light-bg);">
+                <td colspan="3" style="font-weight: 700; padding: 8px; letter-spacing: 0.05em; text-transform: uppercase; font-size: 0.85em;">${title}</td>
+            </tr>`;
+        }
+
+        function reportTable(rows) {
+            return `<table style="width: 100%; border-collapse: collapse;">
+                <colgroup><col style="width: 10%"><col style="width: 65%"><col style="width: 25%"></colgroup>
+                <tbody>${rows}</tbody>
+            </table>`;
+        }
+
+        // ── Profit & Loss ─────────────────────────────────────────────────────────
+
+        document.getElementById('plBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+
+            UIUtils.showLoading();
+            const response = await ApiService.getProfitAndLoss(orgId, fromDate.value, reportDate.value);
+            UIUtils.hideLoading();
+
+            if (!response.ok) { UIUtils.showAlert('Error loading Profit & Loss', 'error'); return; }
+
+            const r = response.data;
+            let rows = `<tr><td colspan="3" style="padding: 12px 0;">
+                <strong>Period: ${UIUtils.formatDate(r.fromDate)} – ${UIUtils.formatDate(r.toDate)}</strong>
+            </td></tr>`;
+
+            rows += sectionHeader('Revenue');
+            rows += sectionRows(r.revenue);
+            rows += subtotalRow('Total Revenue', r.revenue.reduce((s, l) => s + l.amount, 0), true);
+
+            if (r.costOfSales.length > 0) {
+                rows += sectionHeader('Cost of Sales');
+                rows += sectionRows(r.costOfSales);
+                rows += subtotalRow('Total Cost of Sales', r.costOfSales.reduce((s, l) => s + l.amount, 0), true);
+            }
+
+            rows += subtotalRow('Gross Profit', r.grossProfit, true);
+
+            if (r.operatingExpenses.length > 0) {
+                rows += sectionHeader('Operating Expenses');
+                rows += sectionRows(r.operatingExpenses);
+                rows += subtotalRow('Total Operating Expenses', r.operatingExpenses.reduce((s, l) => s + l.amount, 0), true);
+            }
+
+            if (r.financeCosts.length > 0) {
+                rows += sectionHeader('Finance Costs');
+                rows += sectionRows(r.financeCosts);
+                rows += subtotalRow('Total Finance Costs', r.financeCosts.reduce((s, l) => s + l.amount, 0), true);
+            }
+
+            rows += totalRow(r.netProfit >= 0 ? 'Net Profit' : 'Net Loss', r.netProfit);
+
+            reportContainer.innerHTML = `<h3>Profit & Loss Statement</h3>${reportTable(rows)}`;
+        });
+
+        // ── Balance Sheet ─────────────────────────────────────────────────────────
+
+        document.getElementById('bsBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+
+            UIUtils.showLoading();
+            const response = await ApiService.getBalanceSheet(orgId, reportDate.value);
+            UIUtils.hideLoading();
+
+            if (!response.ok) { UIUtils.showAlert('Error loading Balance Sheet', 'error'); return; }
+
+            const r = response.data;
+            let rows = `<tr><td colspan="3" style="padding: 12px 0;">
+                <strong>As of ${UIUtils.formatDate(r.asOfDate)}</strong>
+            </td></tr>`;
+
+            // Assets
+            rows += sectionHeader('Assets');
+            if (r.currentAssets.length > 0) {
+                rows += `<tr><td colspan="3" style="padding-left: 12px; font-style: italic; color: var(--secondary-color); font-size: 0.9em;">Current Assets</td></tr>`;
+                rows += sectionRows(r.currentAssets);
+            }
+            if (r.nonCurrentAssets.length > 0) {
+                rows += `<tr><td colspan="3" style="padding-left: 12px; font-style: italic; color: var(--secondary-color); font-size: 0.9em;">Non-Current Assets</td></tr>`;
+                rows += sectionRows(r.nonCurrentAssets);
+            }
+            rows += subtotalRow('Total Assets', r.totalAssets, true);
+
+            // Liabilities
+            rows += sectionHeader('Liabilities');
+            if (r.currentLiabilities.length > 0) {
+                rows += `<tr><td colspan="3" style="padding-left: 12px; font-style: italic; color: var(--secondary-color); font-size: 0.9em;">Current Liabilities</td></tr>`;
+                rows += sectionRows(r.currentLiabilities);
+            }
+            if (r.nonCurrentLiabilities.length > 0) {
+                rows += `<tr><td colspan="3" style="padding-left: 12px; font-style: italic; color: var(--secondary-color); font-size: 0.9em;">Non-Current Liabilities</td></tr>`;
+                rows += sectionRows(r.nonCurrentLiabilities);
+            }
+            rows += subtotalRow('Total Liabilities', r.totalLiabilities, true);
+
+            // Equity
+            rows += sectionHeader('Equity');
+            rows += sectionRows(r.equity);
+            rows += `<tr>
+                <td style="padding-left: 24px;"></td>
+                <td style="padding-left: 24px;">${r.currentYearProfit >= 0 ? 'Current Year Profit' : 'Current Year Loss'}</td>
+                <td style="text-align: right;">${UIUtils.formatCurrency(r.currentYearProfit)}</td>
+            </tr>`;
+            rows += subtotalRow('Total Equity', r.totalEquity, true);
+
+            rows += totalRow('Total Liabilities & Equity', r.totalLiabilities + r.totalEquity);
+
+            reportContainer.innerHTML = `<h3>Statement of Financial Position</h3>${reportTable(rows)}`;
+        });
 
         // Trial Balance Report
         document.getElementById('trialBalanceBtn').addEventListener('click', async () => {

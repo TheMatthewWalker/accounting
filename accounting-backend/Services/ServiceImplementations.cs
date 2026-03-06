@@ -588,6 +588,153 @@ public class ReportService : IReportService
 
         return new GeneralLedgerResponse { Entries = entries };
     }
+
+    public async Task<ProfitAndLossResponse> GetProfitAndLossAsync(Guid organisationId, DateTime fromDate, DateTime toDate)
+    {
+        _logger.LogInformation("Generating P&L for organisation {OrganisationId} from {FromDate} to {ToDate}", organisationId, fromDate, toDate);
+
+        var accounts = await _context.GLAccounts
+            .Where(a => a.OrganisationId == organisationId && a.IsActive &&
+                        (a.Type == "Revenue" || a.Type == "Expense"))
+            .OrderBy(a => a.Code)
+            .ToListAsync();
+
+        var revenue = new List<PnLLineResponse>();
+        var costOfSales = new List<PnLLineResponse>();
+        var operatingExpenses = new List<PnLLineResponse>();
+        var financeCosts = new List<PnLLineResponse>();
+
+        foreach (var account in accounts)
+        {
+            var entries = await _context.JournalEntries
+                .AsNoTracking()
+                .Where(je => je.GLAccountId == account.Id &&
+                             je.DaybookEntry!.EntryDate >= fromDate &&
+                             je.DaybookEntry!.EntryDate <= toDate &&
+                             je.DaybookEntry!.IsPosted)
+                .ToListAsync();
+
+            decimal debits = entries.Sum(je => je.DebitAmount);
+            decimal credits = entries.Sum(je => je.CreditAmount);
+
+            if (account.Type == "Revenue")
+            {
+                decimal amount = credits - debits;
+                if (amount != 0)
+                    revenue.Add(new PnLLineResponse { Code = account.Code, Name = account.Name, SubType = account.SubType ?? "", Amount = amount });
+            }
+            else
+            {
+                decimal amount = debits - credits;
+                if (amount != 0)
+                {
+                    var line = new PnLLineResponse { Code = account.Code, Name = account.Name, SubType = account.SubType ?? "", Amount = amount };
+                    if (account.SubType == "Cost of Sales")
+                        costOfSales.Add(line);
+                    else if (account.SubType == "Finance Cost")
+                        financeCosts.Add(line);
+                    else
+                        operatingExpenses.Add(line);
+                }
+            }
+        }
+
+        decimal totalRevenue = revenue.Sum(r => r.Amount);
+        decimal totalCoS = costOfSales.Sum(c => c.Amount);
+        decimal grossProfit = totalRevenue - totalCoS;
+        decimal totalOpEx = operatingExpenses.Sum(o => o.Amount);
+        decimal totalFinance = financeCosts.Sum(f => f.Amount);
+        decimal netProfit = grossProfit - totalOpEx - totalFinance;
+
+        return new ProfitAndLossResponse
+        {
+            FromDate = fromDate,
+            ToDate = toDate,
+            Revenue = revenue,
+            CostOfSales = costOfSales,
+            GrossProfit = grossProfit,
+            OperatingExpenses = operatingExpenses,
+            FinanceCosts = financeCosts,
+            NetProfit = netProfit
+        };
+    }
+
+    public async Task<BalanceSheetResponse> GetBalanceSheetAsync(Guid organisationId, DateTime asOfDate)
+    {
+        _logger.LogInformation("Generating balance sheet for organisation {OrganisationId} as of {AsOfDate}", organisationId, asOfDate);
+
+        var accounts = await _context.GLAccounts
+            .Where(a => a.OrganisationId == organisationId && a.IsActive)
+            .OrderBy(a => a.Code)
+            .ToListAsync();
+
+        var currentAssets = new List<BalanceSheetLineResponse>();
+        var nonCurrentAssets = new List<BalanceSheetLineResponse>();
+        var currentLiabilities = new List<BalanceSheetLineResponse>();
+        var nonCurrentLiabilities = new List<BalanceSheetLineResponse>();
+        var equity = new List<BalanceSheetLineResponse>();
+        decimal currentYearProfit = 0;
+
+        foreach (var account in accounts)
+        {
+            var entries = await _context.JournalEntries
+                .AsNoTracking()
+                .Where(je => je.GLAccountId == account.Id &&
+                             je.DaybookEntry!.EntryDate <= asOfDate &&
+                             je.DaybookEntry!.IsPosted)
+                .ToListAsync();
+
+            decimal debits = entries.Sum(je => je.DebitAmount);
+            decimal credits = entries.Sum(je => je.CreditAmount);
+            decimal balance = (account.Type == "Asset" || account.Type == "Expense")
+                ? account.OpeningBalance + debits - credits
+                : account.OpeningBalance + credits - debits;
+
+            if (account.Type == "Revenue")
+            {
+                currentYearProfit += balance;
+            }
+            else if (account.Type == "Expense")
+            {
+                currentYearProfit -= balance;
+            }
+            else if (Math.Abs(balance) > 0.005m)
+            {
+                var line = new BalanceSheetLineResponse { Code = account.Code, Name = account.Name, Amount = balance };
+                bool isNonCurrent = !string.IsNullOrEmpty(account.SubType) && account.SubType.Contains("Non");
+                switch (account.Type)
+                {
+                    case "Asset":
+                        (isNonCurrent ? nonCurrentAssets : currentAssets).Add(line);
+                        break;
+                    case "Liability":
+                        (isNonCurrent ? nonCurrentLiabilities : currentLiabilities).Add(line);
+                        break;
+                    case "Equity":
+                        equity.Add(line);
+                        break;
+                }
+            }
+        }
+
+        decimal totalAssets = currentAssets.Sum(a => a.Amount) + nonCurrentAssets.Sum(a => a.Amount);
+        decimal totalLiabilities = currentLiabilities.Sum(l => l.Amount) + nonCurrentLiabilities.Sum(l => l.Amount);
+        decimal totalEquity = equity.Sum(e => e.Amount) + currentYearProfit;
+
+        return new BalanceSheetResponse
+        {
+            AsOfDate = asOfDate,
+            CurrentAssets = currentAssets,
+            NonCurrentAssets = nonCurrentAssets,
+            TotalAssets = totalAssets,
+            CurrentLiabilities = currentLiabilities,
+            NonCurrentLiabilities = nonCurrentLiabilities,
+            TotalLiabilities = totalLiabilities,
+            Equity = equity,
+            CurrentYearProfit = currentYearProfit,
+            TotalEquity = totalEquity
+        };
+    }
 }
 
 public class CustomerSupplierService : ICustomerSupplierService
