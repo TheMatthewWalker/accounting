@@ -214,10 +214,7 @@
             }
         });
 
-        const savedOrg = ApiService.getSelectedOrg();
-        if (savedOrg) {
-            document.getElementById('organisationSelect').value = savedOrg;
-        }
+        await ApiService.populateOrganisationSelector();
         loadSuppliers();
 
         document.getElementById('logoutBtn').addEventListener('click', (e) => {

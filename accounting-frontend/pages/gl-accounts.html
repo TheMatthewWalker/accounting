@@ -34,8 +34,9 @@
                 <p>Manage your chart of accounts</p>
             </div>
 
-            <div style="margin-bottom: 20px;">
+            <div style="margin-bottom: 20px; display: flex; gap: 10px;">
                 <button id="newAccountBtn" class="btn btn-primary">+ New Account</button>
+                <button id="recommendedAccountsBtn" class="btn btn-secondary">⭐ Add Recommended Accounts</button>
             </div>
 
             <div id="accountFormContainer" style="display: none; margin-bottom: 30px; background: var(--light-bg); padding: 20px; border-radius: 8px;">
@@ -102,6 +103,24 @@
                 </table>
             </div>
         </main>
+    </div>
+
+    <!-- Recommended Accounts Modal -->
+    <div id="recommendedModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; overflow-y:auto;">
+        <div style="background:#fff; max-width:750px; margin:40px auto; border-radius:10px; padding:30px; position:relative;">
+            <h2 style="margin-bottom:6px;">Recommended Chart of Accounts</h2>
+            <p style="color:var(--secondary-color); margin-bottom:20px;">Select the accounts you want to add. Already-existing codes will be skipped.</p>
+
+            <div id="recGroupsContainer"></div>
+
+            <div style="display:flex; gap:10px; margin-top:24px; justify-content:flex-end; align-items:center;">
+                <label style="display:flex; align-items:center; gap:6px; cursor:pointer; color:var(--secondary-color); font-size:0.9em;">
+                    <input type="checkbox" id="selectAllRec"> Select / deselect all
+                </label>
+                <button type="button" class="btn btn-secondary" id="closeRecommendedModal">Cancel</button>
+                <button type="button" class="btn btn-success" id="addSelectedRec">Add Selected</button>
+            </div>
+        </div>
     </div>
 
     <script type="module">
@@ -192,7 +211,7 @@
                 accountFormContainer.style.display = 'none';
                 loadAccounts();
             } else {
-                UIUtils.showAlert(response.data?.message || 'Error creating account', 'error');
+                UIUtils.showAlert(response.data?.error?.message || 'Error creating account', 'error');
             }
         });
 
@@ -214,6 +233,170 @@
             }
         };
 
+        // ── Recommended Accounts ────────────────────────────────────────────────
+
+        const RECOMMENDED_ACCOUNTS = [
+            {
+                group: 'Assets',
+                accounts: [
+                    { code: '1000', name: 'Bank Account',                 type: 'Asset',   subType: 'Current Asset',    description: 'Main business bank account' },
+                    { code: '1010', name: 'Petty Cash',                  type: 'Asset',   subType: 'Current Asset',    description: 'Cash on hand for small day-to-day expenses' },
+                    { code: '1100', name: 'Trade Receivables',           type: 'Asset',   subType: 'Current Asset',    description: 'Amounts owed by customers' },
+                    { code: '1150', name: 'Allowance for Doubtful Debts',type: 'Asset',   subType: 'Current Asset',    description: 'Provision for uncollectable receivables' },
+                    { code: '1200', name: 'Inventory',                   type: 'Asset',   subType: 'Current Asset',    description: 'Goods held for sale' },
+                    { code: '1300', name: 'Prepaid Expenses',            type: 'Asset',   subType: 'Current Asset',    description: 'Expenses paid in advance' },
+                    { code: '1500', name: 'Property, Plant & Equipment', type: 'Asset',   subType: 'Non-Current Asset',description: 'Tangible long-term assets' },
+                    { code: '1510', name: 'Accumulated Depreciation',    type: 'Asset',   subType: 'Non-Current Asset',description: 'Contra account for depreciation of fixed assets' },
+                ]
+            },
+            {
+                group: 'Liabilities',
+                accounts: [
+                    { code: '2000', name: 'Trade Payables',              type: 'Liability', subType: 'Current Liability',    description: 'Amounts owed to suppliers' },
+                    { code: '2100', name: 'VAT / Sales Tax Payable',     type: 'Liability', subType: 'Current Liability',    description: 'Tax collected and due to be remitted' },
+                    { code: '2150', name: 'VAT / Sales Tax Recoverable', type: 'Asset',     subType: 'Current Asset',        description: 'Input tax reclaimable from tax authority' },
+                    { code: '2200', name: 'Accrued Expenses',            type: 'Liability', subType: 'Current Liability',    description: 'Expenses incurred but not yet paid' },
+                    { code: '2300', name: 'Short-Term Loans',            type: 'Liability', subType: 'Current Liability',    description: 'Borrowings due within one year' },
+                    { code: '2500', name: 'Long-Term Loans',             type: 'Liability', subType: 'Non-Current Liability',description: 'Borrowings due after one year' },
+                ]
+            },
+            {
+                group: 'Equity',
+                accounts: [
+                    { code: '3000', name: 'Share Capital',               type: 'Equity', subType: 'Equity', description: 'Capital contributed by shareholders' },
+                    { code: '3100', name: 'Retained Earnings',           type: 'Equity', subType: 'Equity', description: 'Cumulative profits retained in the business' },
+                    { code: '3200', name: 'Drawings / Dividends',        type: 'Equity', subType: 'Equity', description: 'Owner withdrawals or dividends paid' },
+                ]
+            },
+            {
+                group: 'Revenue',
+                accounts: [
+                    { code: '4000', name: 'Sales Revenue',               type: 'Revenue', subType: 'Trading Income',    description: 'Income from sale of goods or services' },
+                    { code: '4010', name: 'Sales Returns & Allowances',  type: 'Revenue', subType: 'Trading Income',    description: 'Contra account for returned or discounted sales' },
+                    { code: '4050', name: 'Discounts Received',          type: 'Revenue', subType: 'Trading Income',    description: 'Settlement discounts received from suppliers' },
+                    { code: '4100', name: 'Other Income',                type: 'Revenue', subType: 'Other Income',      description: 'Miscellaneous income not from core trading' },
+                    { code: '4200', name: 'Interest Income',             type: 'Revenue', subType: 'Other Income',      description: 'Interest earned on deposits and loans' },
+                ]
+            },
+            {
+                group: 'Expenses',
+                accounts: [
+                    { code: '5000', name: 'Purchases',                   type: 'Expense', subType: 'Cost of Sales',     description: 'Cost of goods purchased for resale' },
+                    { code: '5010', name: 'Purchase Returns & Allowances',type:'Expense', subType: 'Cost of Sales',     description: 'Contra account for returned or discounted purchases' },
+                    { code: '5050', name: 'Discounts Allowed',           type: 'Expense', subType: 'Cost of Sales',     description: 'Settlement discounts granted to customers' },
+                    { code: '5100', name: 'Direct Labour',               type: 'Expense', subType: 'Cost of Sales',     description: 'Wages directly attributable to production' },
+                    { code: '5200', name: 'Freight & Carriage In',       type: 'Expense', subType: 'Cost of Sales',     description: 'Delivery costs on incoming goods' },
+                    { code: '6000', name: 'Salaries & Wages',            type: 'Expense', subType: 'Operating Expense', description: 'Employee remuneration' },
+                    { code: '6100', name: 'Rent & Rates',                type: 'Expense', subType: 'Operating Expense', description: 'Premises costs' },
+                    { code: '6200', name: 'Utilities',                   type: 'Expense', subType: 'Operating Expense', description: 'Electricity, gas, water' },
+                    { code: '6300', name: 'Depreciation Expense',        type: 'Expense', subType: 'Operating Expense', description: 'Periodic depreciation charge on fixed assets' },
+                    { code: '6400', name: 'Office Supplies & Stationery',type: 'Expense', subType: 'Operating Expense', description: 'Day-to-day office consumables' },
+                    { code: '6500', name: 'Marketing & Advertising',     type: 'Expense', subType: 'Operating Expense', description: 'Promotional and advertising costs' },
+                    { code: '6600', name: 'Travel & Entertainment',      type: 'Expense', subType: 'Operating Expense', description: 'Business travel and client entertainment' },
+                    { code: '6700', name: 'Professional Fees',           type: 'Expense', subType: 'Operating Expense', description: 'Legal, accounting and consultancy fees' },
+                    { code: '6800', name: 'Bank Charges & Interest',     type: 'Expense', subType: 'Finance Cost',      description: 'Bank fees and loan interest' },
+                    { code: '6900', name: 'Bad Debt Expense',            type: 'Expense', subType: 'Operating Expense', description: 'Write-off of uncollectable receivables' },
+                ]
+            }
+        ];
+
+        function buildRecommendedModal() {
+            const container = document.getElementById('recGroupsContainer');
+            container.innerHTML = RECOMMENDED_ACCOUNTS.map((group, gi) => `
+                <div style="margin-bottom:20px;">
+                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                        <input type="checkbox" class="rec-group-cb" data-group="${gi}" id="recGroup${gi}" checked>
+                        <label for="recGroup${gi}" style="font-weight:600; cursor:pointer;">${group.group}</label>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; padding-left:20px;">
+                        ${group.accounts.map((acc, ai) => `
+                            <label style="display:flex; align-items:flex-start; gap:8px; padding:8px; border:1px solid var(--border-color); border-radius:6px; cursor:pointer; background:var(--light-bg);">
+                                <input type="checkbox" class="rec-acc-cb" data-group="${gi}" data-idx="${ai}" checked style="margin-top:2px; flex-shrink:0;">
+                                <span>
+                                    <span style="font-weight:500;">${acc.code} — ${acc.name}</span><br>
+                                    <span style="font-size:0.8em; color:var(--secondary-color);">${acc.type} · ${acc.subType}</span>
+                                </span>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+
+            // Group checkbox toggles all children
+            container.querySelectorAll('.rec-group-cb').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    container.querySelectorAll(`.rec-acc-cb[data-group="${cb.dataset.group}"]`)
+                        .forEach(c => c.checked = cb.checked);
+                });
+            });
+
+            // When all children checked/unchecked, sync group checkbox
+            container.querySelectorAll('.rec-acc-cb').forEach(cb => {
+                cb.addEventListener('change', () => {
+                    const siblings = [...container.querySelectorAll(`.rec-acc-cb[data-group="${cb.dataset.group}"]`)];
+                    const groupCb  = container.querySelector(`.rec-group-cb[data-group="${cb.dataset.group}"]`);
+                    groupCb.checked = siblings.every(s => s.checked);
+                });
+            });
+        }
+
+        document.getElementById('recommendedAccountsBtn').addEventListener('click', () => {
+            buildRecommendedModal();
+            document.getElementById('recommendedModal').style.display = 'block';
+        });
+
+        document.getElementById('closeRecommendedModal').addEventListener('click', () => {
+            document.getElementById('recommendedModal').style.display = 'none';
+        });
+
+        document.getElementById('selectAllRec').addEventListener('change', (e) => {
+            document.querySelectorAll('.rec-acc-cb, .rec-group-cb').forEach(cb => cb.checked = e.target.checked);
+        });
+
+        document.getElementById('addSelectedRec').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) {
+                UIUtils.showAlert('Please select an organisation first', 'error');
+                return;
+            }
+
+            const selected = [];
+            document.querySelectorAll('.rec-acc-cb:checked').forEach(cb => {
+                selected.push(RECOMMENDED_ACCOUNTS[cb.dataset.group].accounts[cb.dataset.idx]);
+            });
+
+            if (selected.length === 0) {
+                UIUtils.showAlert('No accounts selected', 'error');
+                return;
+            }
+
+            document.getElementById('recommendedModal').style.display = 'none';
+            UIUtils.showLoading();
+
+            let created = 0, skipped = 0, failed = 0;
+            for (const acc of selected) {
+                const response = await ApiService.createGLAccount(orgId, { ...acc, openingBalance: 0 });
+                if (response.ok) {
+                    created++;
+                } else if (response.status === 409 || response.data?.error?.message?.toLowerCase().includes('duplicate') || response.data?.error?.message?.toLowerCase().includes('exists')) {
+                    skipped++;
+                } else {
+                    failed++;
+                }
+            }
+
+            UIUtils.hideLoading();
+
+            const parts = [];
+            if (created)  parts.push(`${created} account${created  !== 1 ? 's' : ''} created`);
+            if (skipped)  parts.push(`${skipped} skipped (already exist)`);
+            if (failed)   parts.push(`${failed} failed`);
+            UIUtils.showAlert(parts.join(', '), failed ? 'error' : 'success');
+            loadAccounts();
+        });
+
+        // ────────────────────────────────────────────────────────────────────────
+
         // Organization selector
         document.getElementById('organisationSelect').addEventListener('change', (e) => {
             if (e.target.value) {
@@ -222,10 +405,7 @@
             }
         });
 
-        const savedOrg = ApiService.getSelectedOrg();
-        if (savedOrg) {
-            document.getElementById('organisationSelect').value = savedOrg;
-        }
+        await ApiService.populateOrganisationSelector();
         loadAccounts();
     </script>
 </body>

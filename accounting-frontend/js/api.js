@@ -209,6 +209,18 @@ class ApiService {
         );
     }
 
+    static async getProfitAndLoss(organisationId, fromDate, toDate) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/reports/profit-and-loss?fromDate=${fromDate}&toDate=${toDate}`
+        );
+    }
+
+    static async getBalanceSheet(organisationId, asOfDate = null) {
+        let url = `${API_BASE_URL}/organisations/${organisationId}/reports/balance-sheet`;
+        if (asOfDate) url += `?asOfDate=${asOfDate}`;
+        return this.request(url);
+    }
+
     // Customer Endpoints
     static async createCustomer(organisationId, customer) {
         return this.request(
@@ -280,6 +292,24 @@ class ApiService {
 
     static getSelectedOrg() {
         return localStorage.getItem(ORG_KEY);
+    }
+
+    static async populateOrganisationSelector() {
+        const response = await this.listOrganisations();
+        if (response.ok) {
+            const orgs = response.data;
+            const select = document.getElementById('organisationSelect');
+            select.innerHTML = '<option value="">Select Organisation</option>';
+            orgs.forEach(o => {
+                const opt = document.createElement('option');
+                opt.value = o.id;
+                opt.textContent = o.name;
+                select.appendChild(opt);
+            });
+            const saved = this.getSelectedOrg();
+            if (saved) select.value = saved;
+        }
+        return response;
     }
 
     static getCurrentUser() {

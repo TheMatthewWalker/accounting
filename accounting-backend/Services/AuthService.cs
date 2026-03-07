@@ -77,7 +77,7 @@ public class AuthService : IAuthService
         if (user == null)
         {
             _logger.LogWarning("Login attempt with non-existent email: {Email}", email);
-            throw new UnauthorizedException("Invalid email or password");
+            throw new UnauthorizedException("No account found with that email address");
         }
 
         if (!user.IsActive)
@@ -89,7 +89,7 @@ public class AuthService : IAuthService
         if (user.PasswordHash == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
         {
             _logger.LogWarning("Login attempt with invalid password for email: {Email}", email);
-            throw new UnauthorizedException("Invalid email or password");
+            throw new UnauthorizedException("Incorrect password");
         }
 
         user.LastLogin = DateTime.UtcNow;

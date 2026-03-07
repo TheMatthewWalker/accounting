@@ -46,4 +46,19 @@ public class ReportsController : ControllerBase
         var result = await _service.GetGeneralLedgerAsync(organisationId, fromDate, toDate);
         return Ok(result);
     }
+
+    [HttpGet("profit-and-loss")]
+    public async Task<IActionResult> GetProfitAndLoss(Guid organisationId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate)
+    {
+        var result = await _service.GetProfitAndLossAsync(organisationId, fromDate, toDate);
+        return Ok(result);
+    }
+
+    [HttpGet("balance-sheet")]
+    public async Task<IActionResult> GetBalanceSheet(Guid organisationId, [FromQuery] DateTime? asOfDate)
+    {
+        var date = asOfDate ?? DateTime.UtcNow;
+        var result = await _service.GetBalanceSheetAsync(organisationId, date);
+        return Ok(result);
+    }
 }

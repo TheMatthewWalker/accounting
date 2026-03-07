@@ -257,7 +257,7 @@
                 entryFormContainer.style.display = 'none';
                 loadEntries();
             } else {
-                UIUtils.showAlert(response.data?.message || 'Error creating entry', 'error');
+                UIUtils.showAlert(response.data?.error?.message || 'Error creating entry', 'error');
             }
         });
 
@@ -291,10 +291,7 @@
             }
         });
 
-        const savedOrg = ApiService.getSelectedOrg();
-        if (savedOrg) {
-            document.getElementById('organisationSelect').value = savedOrg;
-        }
+        await ApiService.populateOrganisationSelector();
         loadEntries();
     </script>
 </body>
