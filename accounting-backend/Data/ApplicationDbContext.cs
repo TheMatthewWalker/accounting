@@ -44,12 +44,12 @@ public class ApplicationDbContext : DbContext
             .HasForeignKey(ga => ga.OrganisationId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Organisation default VAT account (optional FK to GLAccount; no cascade to avoid cycles)
+        // Organisation default VAT account (optional FK to GLAccount; NoAction to avoid cascade cycles)
         modelBuilder.Entity<Organisation>()
             .HasOne(o => o.DefaultVatAccount)
             .WithMany()
             .HasForeignKey(o => o.DefaultVatAccountId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.NoAction);
 
         // OrganisationMember configuration
         modelBuilder.Entity<OrganisationMember>().HasKey(om => om.Id);

@@ -550,7 +550,7 @@ namespace AccountingApp.Migrations
                     b.HasOne("AccountingApp.Models.GLAccount", "DefaultVatAccount")
                         .WithMany()
                         .HasForeignKey("DefaultVatAccountId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .OnDelete(DeleteBehavior.NoAction);
 
                     b.Navigation("DefaultVatAccount");
                 });

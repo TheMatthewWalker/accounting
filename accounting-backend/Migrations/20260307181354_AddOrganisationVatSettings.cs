@@ -42,7 +42,7 @@ namespace AccountingApp.Migrations
                 column: "DefaultVatAccountId",
                 principalTable: "GLAccounts",
                 principalColumn: "Id",
-                onDelete: ReferentialAction.SetNull);
+                onDelete: ReferentialAction.NoAction);
         }
 
         /// <inheritdoc />
