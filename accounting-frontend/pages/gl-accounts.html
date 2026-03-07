@@ -40,20 +40,21 @@
             </div>
 
             <div id="accountFormContainer" style="display: none; margin-bottom: 30px; background: var(--light-bg); padding: 20px; border-radius: 8px;">
-                <h3>New GL Account</h3>
+                <h3 id="accountFormTitle">New GL Account</h3>
                 <form id="accountForm">
+                    <input type="hidden" id="editingAccountId">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div class="form-group">
                             <label>Account Code</label>
-                            <input type="text" name="code" required>
+                            <input type="text" name="code" id="acctCode" required>
                         </div>
                         <div class="form-group">
                             <label>Account Name</label>
-                            <input type="text" name="name" required>
+                            <input type="text" name="name" id="acctName" required>
                         </div>
                         <div class="form-group">
                             <label>Account Type</label>
-                            <select name="type" required>
+                            <select name="type" id="acctType" required>
                                 <option value="">Select Type</option>
                                 <option value="Asset">Asset</option>
                                 <option value="Liability">Liability</option>
@@ -64,19 +65,19 @@
                         </div>
                         <div class="form-group">
                             <label>Sub Type</label>
-                            <input type="text" name="subType" placeholder="e.g., Current Asset">
+                            <input type="text" name="subType" id="acctSubType" placeholder="e.g., Current Asset">
                         </div>
                         <div class="form-group">
                             <label>Opening Balance</label>
-                            <input type="number" name="openingBalance" step="0.01" value="0">
+                            <input type="number" name="openingBalance" id="acctOpeningBalance" step="0.01" value="0">
                         </div>
                         <div class="form-group">
                             <label>Description</label>
-                            <input type="text" name="description">
+                            <input type="text" name="description" id="acctDescription">
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-                        <button type="submit" class="btn btn-success">Create Account</button>
+                        <button type="submit" class="btn btn-success" id="accountFormSubmitBtn">Create Account</button>
                         <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
                     </div>
                 </form>
@@ -136,11 +137,16 @@
         const accountsTable = document.getElementById('accountsTable');
 
         newAccountBtn.addEventListener('click', () => {
+            document.getElementById('editingAccountId').value = '';
+            document.getElementById('accountFormTitle').textContent = 'New GL Account';
+            document.getElementById('accountFormSubmitBtn').textContent = 'Create Account';
+            accountForm.reset();
             accountFormContainer.style.display = 'block';
         });
 
         cancelBtn.addEventListener('click', () => {
             accountFormContainer.style.display = 'none';
+            document.getElementById('editingAccountId').value = '';
             accountForm.reset();
         });
 
@@ -179,43 +185,60 @@
             }
         }
 
-        // Create account
+        // Create / update account
         accountForm.addEventListener('submit', async (e) => {
             e.preventDefault();
 
             const orgId = ApiService.getSelectedOrg();
-            if (!orgId) {
-                UIUtils.showAlert('Please select an organisation', 'error');
-                return;
-            }
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
 
+            const editId = document.getElementById('editingAccountId').value;
             const formData = new FormData(accountForm);
             const accountData = {
                 code: formData.get('code'),
                 name: formData.get('name'),
                 type: formData.get('type'),
-                subType: formData.get('subType'),
-                openingBalance: parseFloat(formData.get('openingBalance')),
-                description: formData.get('description')
+                subType: formData.get('subType') || null,
+                openingBalance: parseFloat(formData.get('openingBalance')) || 0,
+                description: formData.get('description') || null,
             };
 
             UIUtils.showLoading();
-            const response = await ApiService.createGLAccount(orgId, accountData);
+            const response = editId
+                ? await ApiService.updateGLAccount(orgId, editId, accountData)
+                : await ApiService.createGLAccount(orgId, accountData);
             UIUtils.hideLoading();
 
             if (response.ok) {
-                UIUtils.showAlert('Account created successfully!', 'success');
+                UIUtils.showAlert(editId ? 'Account updated!' : 'Account created!', 'success');
+                document.getElementById('editingAccountId').value = '';
                 accountForm.reset();
                 accountFormContainer.style.display = 'none';
                 loadAccounts();
             } else {
-                UIUtils.showAlert(response.data?.error?.message || 'Error creating account', 'error');
+                UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
             }
         });
 
         // Global functions for inline onclick handlers
         window.editAccount = async (accountId) => {
-            UIUtils.showAlert('Edit functionality coming soon', 'info');
+            const orgId = ApiService.getSelectedOrg();
+            UIUtils.showLoading();
+            const response = await ApiService.getGLAccount(accountId);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert('Failed to load account', 'error'); return; }
+            const a = response.data;
+            document.getElementById('editingAccountId').value = a.id;
+            document.getElementById('accountFormTitle').textContent = 'Edit GL Account';
+            document.getElementById('accountFormSubmitBtn').textContent = 'Save Changes';
+            document.getElementById('acctCode').value = a.code;
+            document.getElementById('acctName').value = a.name;
+            document.getElementById('acctType').value = a.type;
+            document.getElementById('acctSubType').value = a.subType || '';
+            document.getElementById('acctOpeningBalance').value = a.openingBalance ?? 0;
+            document.getElementById('acctDescription').value = a.description || '';
+            accountFormContainer.style.display = 'block';
+            accountFormContainer.scrollIntoView({ behavior: 'smooth' });
         };
 
         window.deleteAccount = async (accountId) => {
@@ -270,7 +293,7 @@
                 group: 'Revenue',
                 accounts: [
                     { code: '4000', name: 'Sales Revenue',               type: 'Revenue', subType: 'Trading Income',    description: 'Income from sale of goods or services' },
-                    { code: '4010', name: 'Sales Returns & Allowances',  type: 'Revenue', subType: 'Trading Income',    description: 'Contra account for returned or discounted sales' },
+                    { code: '4010', name: 'Sales Returns & Allowances',  type: 'Expense', subType: 'Cost of Sales',     description: 'Expense account for goods returned by customers' },
                     { code: '4050', name: 'Discounts Received',          type: 'Revenue', subType: 'Trading Income',    description: 'Settlement discounts received from suppliers' },
                     { code: '4100', name: 'Other Income',                type: 'Revenue', subType: 'Other Income',      description: 'Miscellaneous income not from core trading' },
                     { code: '4200', name: 'Interest Income',             type: 'Revenue', subType: 'Other Income',      description: 'Interest earned on deposits and loans' },

@@ -60,19 +60,32 @@
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div class="form-group">
                             <label>Organisation Name *</label>
-                            <input type="text" name="name" id="orgName" required>
+                            <input type="text" id="orgName" required>
                         </div>
                         <div class="form-group">
                             <label>Registration Number</label>
-                            <input type="text" name="registrationNumber" id="orgRegNum">
+                            <input type="text" id="orgRegNum">
                         </div>
                         <div class="form-group">
                             <label>Tax Number</label>
-                            <input type="text" name="taxNumber" id="orgTaxNum">
+                            <input type="text" id="orgTaxNum">
                         </div>
                         <div class="form-group">
                             <label>Description</label>
-                            <input type="text" name="description" id="orgDescription">
+                            <input type="text" id="orgDescription">
+                        </div>
+                        <div class="form-group">
+                            <label>VAT Reduced Rate %</label>
+                            <input type="number" id="orgVatReduced" value="5" step="0.01" min="0" max="100">
+                        </div>
+                        <div class="form-group">
+                            <label>VAT Standard Rate %</label>
+                            <input type="number" id="orgVatFull" value="20" step="0.01" min="0" max="100">
+                        </div>
+                        <div class="form-group" id="vatAccountGroup" style="display:none;">
+                            <label>Default VAT Account</label>
+                            <select id="orgVatAccount"><option value="">No default VAT account</option></select>
+                            <small style="color:var(--secondary-color);">Used to auto-post VAT on sales/purchase invoices</small>
                         </div>
                     </div>
                     <div style="display: flex; gap: 10px; margin-top: 20px;">
@@ -148,39 +161,46 @@
             document.getElementById('editingOrgId').value = '';
             document.getElementById('orgFormTitle').textContent = 'New Organisation';
             document.getElementById('orgFormSubmitBtn').textContent = 'Create Organisation';
-            document.getElementById('orgForm').reset();
+            document.getElementById('orgName').value = '';
+            document.getElementById('orgRegNum').value = '';
+            document.getElementById('orgTaxNum').value = '';
+            document.getElementById('orgDescription').value = '';
+            document.getElementById('orgVatReduced').value = 5;
+            document.getElementById('orgVatFull').value = 20;
+            document.getElementById('vatAccountGroup').style.display = 'none';
             document.getElementById('orgFormContainer').style.display = 'block';
         });
 
         document.getElementById('cancelBtn').addEventListener('click', () => {
             document.getElementById('orgFormContainer').style.display = 'none';
+            document.getElementById('vatAccountGroup').style.display = 'none';
         });
 
         document.getElementById('orgForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = document.getElementById('editingOrgId').value;
-            const data = {
-                name: document.getElementById('orgName').value,
-                registrationNumber: document.getElementById('orgRegNum').value,
-                taxNumber: document.getElementById('orgTaxNum').value,
-                description: document.getElementById('orgDescription').value,
-            };
+            const name = document.getElementById('orgName').value;
+            const registrationNumber = document.getElementById('orgRegNum').value || null;
+            const taxNumber = document.getElementById('orgTaxNum').value || null;
+            const description = document.getElementById('orgDescription').value || null;
+            const vatReducedRate = parseFloat(document.getElementById('orgVatReduced').value) || 5;
+            const vatFullRate = parseFloat(document.getElementById('orgVatFull').value) || 20;
+            const defaultVatAccountId = document.getElementById('orgVatAccount').value || null;
 
             UIUtils.showLoading();
             const response = id
-                ? await ApiService.updateOrganisation(id, data)
-                : await ApiService.createOrganisation(data.name, data.description, data.registrationNumber, data.taxNumber);
+                ? await ApiService.updateOrganisation(id, { name, registrationNumber, taxNumber, description, vatReducedRate, vatFullRate, defaultVatAccountId })
+                : await ApiService.createOrganisation(name, description, registrationNumber, taxNumber);
             UIUtils.hideLoading();
 
             if (response.ok) {
                 UIUtils.showAlert(id ? 'Organisation updated!' : 'Organisation created!', 'success');
                 document.getElementById('orgFormContainer').style.display = 'none';
-                if (!id) {
-                    ApiService.setSelectedOrg(response.data.id);
-                }
+                document.getElementById('vatAccountGroup').style.display = 'none';
+                if (!id) ApiService.setSelectedOrg(response.data.id);
                 loadOrganisations();
             } else {
-                UIUtils.showAlert(response.data?.error?.message || 'Error saving organisation', 'error');
+                UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
             }
         });
 
@@ -256,7 +276,7 @@
                                             <td>
                                                 <div class="action-buttons">
                                                     <button class="btn btn-sm btn-primary" onclick="openDetail('${o.id}', '${escHtml(o.name)}')">Manage</button>
-                                                    <button class="btn btn-sm btn-secondary" onclick="editOrg('${o.id}', '${escHtml(o.name)}', '${escHtml(o.registrationNumber || '')}', '${escHtml(o.taxNumber || '')}', '${escHtml(o.description || '')}')">Edit</button>
+                                                    <button class="btn btn-sm btn-secondary" onclick="editOrg('${o.id}')">Edit</button>
                                                     <button class="btn btn-sm btn-danger" onclick="deleteOrg('${o.id}', '${escHtml(o.name)}')">Delete</button>
                                                 </div>
                                             </td>
@@ -272,14 +292,32 @@
         }
 
         // --- Edit org ---
-        window.editOrg = (id, name, regNum, taxNum, description) => {
-            document.getElementById('editingOrgId').value = id;
+        window.editOrg = async (id) => {
+            UIUtils.showLoading();
+            const [orgRes, accsRes] = await Promise.all([
+                ApiService.getOrganisation(id),
+                ApiService.getGLAccounts(id),
+            ]);
+            UIUtils.hideLoading();
+            if (!orgRes.ok) { UIUtils.showAlert('Failed to load organisation', 'error'); return; }
+            const o = orgRes.data;
+            document.getElementById('editingOrgId').value = o.id;
             document.getElementById('orgFormTitle').textContent = 'Edit Organisation';
             document.getElementById('orgFormSubmitBtn').textContent = 'Save Changes';
-            document.getElementById('orgName').value = name;
-            document.getElementById('orgRegNum').value = regNum;
-            document.getElementById('orgTaxNum').value = taxNum;
-            document.getElementById('orgDescription').value = description;
+            document.getElementById('orgName').value = o.name || '';
+            document.getElementById('orgRegNum').value = o.registrationNumber || '';
+            document.getElementById('orgTaxNum').value = o.taxNumber || '';
+            document.getElementById('orgDescription').value = o.description || '';
+            document.getElementById('orgVatReduced').value = o.vatReducedRate ?? 5;
+            document.getElementById('orgVatFull').value = o.vatFullRate ?? 20;
+            // Populate VAT account dropdown from GL accounts
+            if (accsRes.ok) {
+                const opts = accsRes.data.map(a => `<option value="${a.id}">${a.code} \u2013 ${a.name} (${a.type})</option>`).join('');
+                const sel = document.getElementById('orgVatAccount');
+                sel.innerHTML = '<option value="">No default VAT account</option>' + opts;
+                sel.value = o.defaultVatAccountId || '';
+            }
+            document.getElementById('vatAccountGroup').style.display = 'block';
             document.getElementById('orgFormContainer').style.display = 'block';
             document.getElementById('orgFormContainer').scrollIntoView({ behavior: 'smooth' });
         };
