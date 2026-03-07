@@ -67,8 +67,8 @@ public class OrganisationMember
     public Guid UserId { get; set; }
     public Guid OrganisationId { get; set; }
     [Required]
-    [RegularExpression("^(Owner|Admin|Member)$")]
-    public string Role { get; set; } = "Member"; // Owner, Admin, Member
+    [RegularExpression("^(Viewer|Bookkeeper|Manager|Owner)$")]
+    public string Role { get; set; } = "Viewer"; // Viewer, Bookkeeper, Manager, Owner
     public DateTime JoinedAt { get; set; } = DateTime.UtcNow;
     public bool IsActive { get; set; } = true;
 
@@ -114,8 +114,8 @@ public class DaybookEntry
     public Guid Id { get; set; }
     public Guid OrganisationId { get; set; }
     [Required]
-    [RegularExpression("^(Sales|Purchase|Journal|Bank|Receipt)$")]
-    public string Type { get; set; } = string.Empty; // Sales, Purchase, Journal, Bank, Receipt
+    [RegularExpression("^(Sales|Purchase|Journal|Bank|Receipt|Payment)$")]
+    public string Type { get; set; } = string.Empty; // Sales, Purchase, Journal, Receipt, Payment
     public string? ReferenceNumber { get; set; }
     [Required]
     public DateTime EntryDate { get; set; }
@@ -124,8 +124,14 @@ public class DaybookEntry
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public Guid CreatedBy { get; set; }
 
+    // Optional links to customer/supplier for structured daybook types
+    public Guid? CustomerId { get; set; }
+    public Guid? SupplierId { get; set; }
+
     // Navigation properties
     public Organisation? Organisation { get; set; }
+    public Customer? Customer { get; set; }
+    public Supplier? Supplier { get; set; }
     public ICollection<JournalEntry> JournalEntries { get; set; } = new List<JournalEntry>();
 }
 
@@ -202,6 +208,31 @@ public class Supplier
     // Navigation properties
     public Organisation? Organisation { get; set; }
     public GLAccount? ControlAccount { get; set; }
+}
+
+/// <summary>
+/// Represents a pending invitation for a user to join an organisation
+/// </summary>
+public class OrganisationInvitation
+{
+    public Guid Id { get; set; }
+    public Guid OrganisationId { get; set; }
+    [Required]
+    [EmailAddress]
+    public string InvitedEmail { get; set; } = string.Empty;
+    [Required]
+    [RegularExpression("^(Viewer|Bookkeeper|Manager|Owner)$")]
+    public string Role { get; set; } = "Viewer";
+    [Required]
+    public string Token { get; set; } = string.Empty; // shared with the invitee
+    public Guid InvitedByUserId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime ExpiresAt { get; set; }
+    public bool IsAccepted { get; set; } = false;
+
+    // Navigation properties
+    public Organisation? Organisation { get; set; }
+    public User? InvitedByUser { get; set; }
 }
 
 /// <summary>

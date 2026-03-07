@@ -2,6 +2,58 @@ using System.ComponentModel.DataAnnotations;
 
 namespace AccountingApp.Services;
 
+// ---- Organisation membership & invitation management ----
+
+public interface IOrganisationService
+{
+    Task DeleteOrganisationAsync(Guid organisationId);
+    Task<IEnumerable<MemberResponse>> GetMembersAsync(Guid organisationId);
+    Task<MemberResponse> UpdateMemberRoleAsync(Guid organisationId, Guid memberId, UpdateMemberRoleRequest request);
+    Task RemoveMemberAsync(Guid organisationId, Guid memberId, Guid requestingUserId);
+    Task<InvitationResponse> CreateInvitationAsync(Guid organisationId, Guid invitedByUserId, CreateInvitationRequest request);
+    Task<IEnumerable<InvitationResponse>> GetInvitationsAsync(Guid organisationId);
+    Task CancelInvitationAsync(Guid organisationId, Guid invitationId);
+    Task<MemberResponse> AcceptInvitationAsync(string token, Guid acceptingUserId);
+}
+
+public class MemberResponse
+{
+    public Guid MemberId { get; set; }
+    public Guid UserId { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public string FirstName { get; set; } = string.Empty;
+    public string LastName { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public DateTime JoinedAt { get; set; }
+}
+
+public class UpdateMemberRoleRequest
+{
+    [Required]
+    [RegularExpression("^(Viewer|Bookkeeper|Manager|Owner)$")]
+    public string Role { get; set; } = string.Empty;
+}
+
+public class CreateInvitationRequest
+{
+    [Required]
+    [EmailAddress]
+    public string Email { get; set; } = string.Empty;
+    [Required]
+    [RegularExpression("^(Viewer|Bookkeeper|Manager|Owner)$")]
+    public string Role { get; set; } = string.Empty;
+}
+
+public class InvitationResponse
+{
+    public Guid Id { get; set; }
+    public string InvitedEmail { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty;
+    public string Token { get; set; } = string.Empty;
+    public DateTime ExpiresAt { get; set; }
+    public bool IsAccepted { get; set; }
+}
+
 public interface IAuthService
 {
     Task<AuthResponse> RegisterAsync(string email, string password, string firstName, string lastName);
@@ -68,16 +120,114 @@ public class GLAccountResponse
 public interface IDaybookService
 {
     Task<DaybookResponse> CreateDaybookEntryAsync(Guid organisationId, CreateDaybookRequest request);
+    Task<DaybookResponse> CreateSalesDaybookAsync(Guid organisationId, CreateSalesDaybookRequest request);
+    Task<DaybookResponse> CreatePurchaseDaybookAsync(Guid organisationId, CreatePurchaseDaybookRequest request);
+    Task<DaybookResponse> CreateReceiptDaybookAsync(Guid organisationId, CreateReceiptDaybookRequest request);
+    Task<DaybookResponse> CreatePaymentDaybookAsync(Guid organisationId, CreatePaymentDaybookRequest request);
     Task<DaybookResponse> GetDaybookEntryAsync(Guid entryId);
     Task<IEnumerable<DaybookResponse>> GetDaybookEntriesByOrganisationAsync(Guid organisationId, DateTime? fromDate = null, DateTime? toDate = null);
     Task PostDaybookEntryAsync(Guid entryId);
     Task DeleteDaybookEntryAsync(Guid entryId);
 }
 
+// ---- Sales Daybook ----
+
+public class CreateSalesDaybookRequest
+{
+    public string? ReferenceNumber { get; set; }
+    [Required]
+    public DateTime EntryDate { get; set; }
+    public string? Description { get; set; }
+    // Either CustomerId (with a ControlAccountId) or ReceivableAccountId must be provided
+    public Guid? CustomerId { get; set; }
+    public Guid? ReceivableAccountId { get; set; }
+    // Required when any line has VatAmount > 0
+    public Guid? VatAccountId { get; set; }
+    [Required]
+    [MinLength(1, ErrorMessage = "At least 1 sales line is required")]
+    public List<SalesDaybookLine> Lines { get; set; } = new();
+}
+
+public class SalesDaybookLine
+{
+    [Required]
+    public string Description { get; set; } = string.Empty;
+    [Range(0.01, double.MaxValue, ErrorMessage = "Net amount must be greater than zero")]
+    public decimal NetAmount { get; set; }
+    [Range(0, double.MaxValue)]
+    public decimal VatAmount { get; set; }
+    public Guid RevenueAccountId { get; set; }
+}
+
+// ---- Purchase Daybook ----
+
+public class CreatePurchaseDaybookRequest
+{
+    public string? ReferenceNumber { get; set; }
+    [Required]
+    public DateTime EntryDate { get; set; }
+    public string? Description { get; set; }
+    // Either SupplierId (with a ControlAccountId) or PayableAccountId must be provided
+    public Guid? SupplierId { get; set; }
+    public Guid? PayableAccountId { get; set; }
+    // Required when any line has VatAmount > 0
+    public Guid? VatAccountId { get; set; }
+    [Required]
+    [MinLength(1, ErrorMessage = "At least 1 purchase line is required")]
+    public List<PurchaseDaybookLine> Lines { get; set; } = new();
+}
+
+public class PurchaseDaybookLine
+{
+    [Required]
+    public string Description { get; set; } = string.Empty;
+    [Range(0.01, double.MaxValue, ErrorMessage = "Net amount must be greater than zero")]
+    public decimal NetAmount { get; set; }
+    [Range(0, double.MaxValue)]
+    public decimal VatAmount { get; set; }
+    public Guid ExpenseAccountId { get; set; }
+}
+
+// ---- Receipt Daybook (money received into bank) ----
+
+public class CreateReceiptDaybookRequest
+{
+    public string? ReferenceNumber { get; set; }
+    [Required]
+    public DateTime EntryDate { get; set; }
+    public string? Description { get; set; }
+    public Guid? CustomerId { get; set; }
+    // Bank/cash GL account to debit
+    public Guid BankAccountId { get; set; }
+    // AR or Revenue GL account to credit
+    public Guid CreditAccountId { get; set; }
+    [Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than zero")]
+    public decimal Amount { get; set; }
+}
+
+// ---- Payment Daybook (money paid out of bank) ----
+
+public class CreatePaymentDaybookRequest
+{
+    public string? ReferenceNumber { get; set; }
+    [Required]
+    public DateTime EntryDate { get; set; }
+    public string? Description { get; set; }
+    public Guid? SupplierId { get; set; }
+    // AP or Expense GL account to debit
+    public Guid DebitAccountId { get; set; }
+    // Bank/cash GL account to credit
+    public Guid BankAccountId { get; set; }
+    [Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than zero")]
+    public decimal Amount { get; set; }
+}
+
+// ---- Manual Journal ----
+
 public class CreateDaybookRequest
 {
     [Required]
-    [RegularExpression("^(Sales|Purchase|Journal|Bank|Receipt)$")]
+    [RegularExpression("^(Sales|Purchase|Journal|Bank|Receipt|Payment)$")]
     public string Type { get; set; } = string.Empty;
     public string? ReferenceNumber { get; set; }
     [Required]
@@ -104,6 +254,10 @@ public class DaybookResponse
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
     public bool IsPosted { get; set; }
+    public Guid? CustomerId { get; set; }
+    public string? CustomerName { get; set; }
+    public Guid? SupplierId { get; set; }
+    public string? SupplierName { get; set; }
     public List<JournalLineResponse> Lines { get; set; } = new List<JournalLineResponse>();
 }
 

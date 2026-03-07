@@ -31,43 +31,107 @@
         <main class="main-content">
             <div class="dashboard-header">
                 <h1>Organisations</h1>
-                <p>Manage your business organizations</p>
+                <p>Manage your business organisations</p>
             </div>
 
-            <div style="margin-bottom: 20px;">
+            <!-- Accept invitation banner -->
+            <div id="acceptInvitePanel" style="display:none; margin-bottom: 20px; background: #e8f4fd; border: 1px solid #b3d9f7; padding: 15px 20px; border-radius: 8px;">
+                <h4 style="margin: 0 0 10px;">Accept Invitation</h4>
+                <div style="display: flex; gap: 10px; align-items: flex-end;">
+                    <div class="form-group" style="margin: 0; flex: 1;">
+                        <label>Invitation Token</label>
+                        <input type="text" id="inviteTokenInput" placeholder="Paste your invitation token here">
+                    </div>
+                    <button id="acceptInviteBtn" class="btn btn-primary">Accept</button>
+                    <button id="cancelAcceptBtn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
                 <button id="newOrgBtn" class="btn btn-primary">+ New Organisation</button>
+                <button id="showAcceptInviteBtn" class="btn btn-secondary">Accept Invitation</button>
             </div>
 
+            <!-- Create / Edit form -->
             <div id="orgFormContainer" style="display: none; margin-bottom: 30px; background: var(--light-bg); padding: 20px; border-radius: 8px;">
-                <h3>New Organisation</h3>
+                <h3 id="orgFormTitle">New Organisation</h3>
                 <form id="orgForm">
+                    <input type="hidden" id="editingOrgId">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div class="form-group">
-                            <label>Organisation Name</label>
-                            <input type="text" name="name" required>
+                            <label>Organisation Name *</label>
+                            <input type="text" name="name" id="orgName" required>
                         </div>
                         <div class="form-group">
                             <label>Registration Number</label>
-                            <input type="text" name="registrationNumber">
+                            <input type="text" name="registrationNumber" id="orgRegNum">
                         </div>
                         <div class="form-group">
                             <label>Tax Number</label>
-                            <input type="text" name="taxNumber">
+                            <input type="text" name="taxNumber" id="orgTaxNum">
                         </div>
                         <div class="form-group">
                             <label>Description</label>
-                            <input type="text" name="description">
+                            <input type="text" name="description" id="orgDescription">
                         </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-                        <button type="submit" class="btn btn-success">Create Organisation</button>
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button type="submit" class="btn btn-success" id="orgFormSubmitBtn">Create Organisation</button>
                         <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
                     </div>
                 </form>
             </div>
 
-            <div class="dashboard-grid">
-                <div id="organisationsContainer"></div>
+            <!-- Organisations list -->
+            <div id="organisationsContainer"></div>
+
+            <!-- Organisation detail panel (members + invitations) -->
+            <div id="orgDetailPanel" style="display: none; margin-top: 30px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h2 id="orgDetailName"></h2>
+                    <button id="closeDetailBtn" class="btn btn-secondary btn-sm">Close</button>
+                </div>
+
+                <!-- Tabs -->
+                <div style="display: flex; gap: 0; border-bottom: 2px solid var(--border-color); margin-bottom: 20px;">
+                    <button class="tab-btn active" data-tab="members" style="padding: 8px 20px; border: none; background: none; cursor: pointer; font-size: 14px; border-bottom: 2px solid var(--primary-color); margin-bottom: -2px; color: var(--primary-color);">Members</button>
+                    <button class="tab-btn" data-tab="invitations" style="padding: 8px 20px; border: none; background: none; cursor: pointer; font-size: 14px; color: var(--secondary-color);">Invitations</button>
+                </div>
+
+                <!-- Members tab -->
+                <div id="tab-members">
+                    <div style="margin-bottom: 15px;">
+                        <button id="inviteNewBtn" class="btn btn-primary btn-sm">+ Invite User</button>
+                    </div>
+                    <div id="inviteFormInline" style="display:none; background: var(--light-bg); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h4 style="margin: 0 0 10px;">Send Invitation</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: flex-end;">
+                            <div class="form-group" style="margin: 0;">
+                                <label>Email Address</label>
+                                <input type="email" id="inviteEmail">
+                            </div>
+                            <div class="form-group" style="margin: 0;">
+                                <label>Role</label>
+                                <select id="inviteRole">
+                                    <option value="Viewer">Viewer – read-only</option>
+                                    <option value="Bookkeeper">Bookkeeper – create entries</option>
+                                    <option value="Manager" selected>Manager – approve entries, manage contacts</option>
+                                    <option value="Owner">Owner – full access</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button id="sendInviteBtn" class="btn btn-success btn-sm">Send</button>
+                                <button id="cancelInviteFormBtn" class="btn btn-secondary btn-sm">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="membersTable"></div>
+                </div>
+
+                <!-- Invitations tab -->
+                <div id="tab-invitations" style="display:none;">
+                    <div id="invitationsTable"></div>
+                </div>
             </div>
         </main>
     </div>
@@ -79,30 +143,84 @@
             window.location.href = 'login.html';
         }
 
-        const newOrgBtn = document.getElementById('newOrgBtn');
-        const cancelBtn = document.getElementById('cancelBtn');
-        const orgFormContainer = document.getElementById('orgFormContainer');
-        const orgForm = document.getElementById('orgForm');
-        const organisationsContainer = document.getElementById('organisationsContainer');
+        let currentDetailOrgId = null;
 
-        newOrgBtn.addEventListener('click', () => {
-            orgFormContainer.style.display = 'block';
+        // --- Org form (create / edit) ---
+        document.getElementById('newOrgBtn').addEventListener('click', () => {
+            document.getElementById('editingOrgId').value = '';
+            document.getElementById('orgFormTitle').textContent = 'New Organisation';
+            document.getElementById('orgFormSubmitBtn').textContent = 'Create Organisation';
+            document.getElementById('orgForm').reset();
+            document.getElementById('orgFormContainer').style.display = 'block';
         });
 
-        cancelBtn.addEventListener('click', () => {
-            orgFormContainer.style.display = 'none';
-            orgForm.reset();
+        document.getElementById('cancelBtn').addEventListener('click', () => {
+            document.getElementById('orgFormContainer').style.display = 'none';
         });
 
+        document.getElementById('orgForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editingOrgId').value;
+            const data = {
+                name: document.getElementById('orgName').value,
+                registrationNumber: document.getElementById('orgRegNum').value,
+                taxNumber: document.getElementById('orgTaxNum').value,
+                description: document.getElementById('orgDescription').value,
+            };
+
+            UIUtils.showLoading();
+            const response = id
+                ? await ApiService.updateOrganisation(id, data)
+                : await ApiService.createOrganisation(data.name, data.description, data.registrationNumber, data.taxNumber);
+            UIUtils.hideLoading();
+
+            if (response.ok) {
+                UIUtils.showAlert(id ? 'Organisation updated!' : 'Organisation created!', 'success');
+                document.getElementById('orgFormContainer').style.display = 'none';
+                if (!id) {
+                    ApiService.setSelectedOrg(response.data.id);
+                }
+                loadOrganisations();
+            } else {
+                UIUtils.showAlert(response.data?.error?.message || 'Error saving organisation', 'error');
+            }
+        });
+
+        // --- Accept invitation ---
+        document.getElementById('showAcceptInviteBtn').addEventListener('click', () => {
+            document.getElementById('acceptInvitePanel').style.display = 'block';
+        });
+        document.getElementById('cancelAcceptBtn').addEventListener('click', () => {
+            document.getElementById('acceptInvitePanel').style.display = 'none';
+            document.getElementById('inviteTokenInput').value = '';
+        });
+        document.getElementById('acceptInviteBtn').addEventListener('click', async () => {
+            const token = document.getElementById('inviteTokenInput').value.trim();
+            if (!token) { UIUtils.showAlert('Please enter a token', 'error'); return; }
+            UIUtils.showLoading();
+            const response = await ApiService.acceptInvitation(token);
+            UIUtils.hideLoading();
+            if (response.ok) {
+                UIUtils.showAlert('Invitation accepted! You have joined the organisation.', 'success');
+                document.getElementById('acceptInvitePanel').style.display = 'none';
+                document.getElementById('inviteTokenInput').value = '';
+                loadOrganisations();
+            } else {
+                UIUtils.showAlert(response.data?.error?.message || 'Invalid or expired token', 'error');
+            }
+        });
+
+        // --- Load organisations list ---
         async function loadOrganisations() {
             UIUtils.showLoading();
             const response = await ApiService.listOrganisations();
             UIUtils.hideLoading();
 
+            const select = document.getElementById('organisationSelect');
+            const container = document.getElementById('organisationsContainer');
+
             if (response.ok) {
                 const orgs = response.data;
-                // populate select
-                const select = document.getElementById('organisationSelect');
                 select.innerHTML = '<option value="">Select Organisation</option>';
                 orgs.forEach(o => {
                     const opt = document.createElement('option');
@@ -114,74 +232,281 @@
                 if (saved) select.value = saved;
 
                 if (orgs.length === 0) {
-                    organisationsContainer.innerHTML = `
-                        <div class="card" style="grid-column: 1/-1;">
-                            <h3>No organisations yet</h3>
-                            <p>Create a new organisation using the form above.</p>
-                        </div>
-                    `;
-                } else {
-                    organisationsContainer.innerHTML = orgs.map(o => `
+                    container.innerHTML = `
                         <div class="card">
-                            <h3>${o.name}</h3>
-                            <p>${o.description || ''}</p>
-                        </div>
-                    `).join('');
+                            <h3>No organisations yet</h3>
+                            <p>Create your first organisation or accept an invitation above.</p>
+                        </div>`;
+                } else {
+                    container.innerHTML = `
+                        <div class="table-container">
+                            <table>
+                                <thead><tr>
+                                    <th>Name</th>
+                                    <th>Registration</th>
+                                    <th>Tax Number</th>
+                                    <th>Description</th>
+                                    <th>Actions</th>
+                                </tr></thead>
+                                <tbody>
+                                    ${orgs.map(o => `
+                                        <tr>
+                                            <td><strong>${escHtml(o.name)}</strong></td>
+                                            <td>${escHtml(o.registrationNumber || '-')}</td>
+                                            <td>${escHtml(o.taxNumber || '-')}</td>
+                                            <td>${escHtml(o.description || '-')}</td>
+                                            <td>
+                                                <div class="action-buttons">
+                                                    <button class="btn btn-sm btn-primary" onclick="openDetail('${o.id}', '${escHtml(o.name)}')">Manage</button>
+                                                    <button class="btn btn-sm btn-secondary" onclick="editOrg('${o.id}', '${escHtml(o.name)}', '${escHtml(o.registrationNumber || '')}', '${escHtml(o.taxNumber || '')}', '${escHtml(o.description || '')}')">Edit</button>
+                                                    <button class="btn btn-sm btn-danger" onclick="deleteOrg('${o.id}', '${escHtml(o.name)}')">Delete</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>`;
                 }
             } else {
-                organisationsContainer.innerHTML = `<p class="error">Unable to load organisations</p>`;
+                container.innerHTML = `<p style="color: var(--danger-color);">Unable to load organisations</p>`;
             }
         }
 
-        orgForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
+        // --- Edit org ---
+        window.editOrg = (id, name, regNum, taxNum, description) => {
+            document.getElementById('editingOrgId').value = id;
+            document.getElementById('orgFormTitle').textContent = 'Edit Organisation';
+            document.getElementById('orgFormSubmitBtn').textContent = 'Save Changes';
+            document.getElementById('orgName').value = name;
+            document.getElementById('orgRegNum').value = regNum;
+            document.getElementById('orgTaxNum').value = taxNum;
+            document.getElementById('orgDescription').value = description;
+            document.getElementById('orgFormContainer').style.display = 'block';
+            document.getElementById('orgFormContainer').scrollIntoView({ behavior: 'smooth' });
+        };
 
-            const formData = new FormData(orgForm);
-            const orgData = {
-                name: formData.get('name'),
-                registrationNumber: formData.get('registrationNumber'),
-                taxNumber: formData.get('taxNumber'),
-                description: formData.get('description')
-            };
-
+        // --- Delete org ---
+        window.deleteOrg = async (id, name) => {
+            if (!confirm(`Delete organisation "${name}"? This cannot be undone.`)) return;
             UIUtils.showLoading();
-            const response = await ApiService.createOrganisation(
-                orgData.name,
-                orgData.description,
-                orgData.registrationNumber,
-                orgData.taxNumber
-            );
+            const response = await ApiService.deleteOrganisation(id);
             UIUtils.hideLoading();
-
             if (response.ok) {
-                UIUtils.showAlert('Organisation created successfully!', 'success');
-                orgForm.reset();
-                orgFormContainer.style.display = 'none';
-                ApiService.setSelectedOrg(response.data.id);
-                document.getElementById('organisationSelect').value = response.data.id;
+                UIUtils.showAlert('Organisation deleted', 'success');
+                if (ApiService.getSelectedOrg() === id) {
+                    ApiService.setSelectedOrg(null);
+                    localStorage.removeItem('selectedOrganisation');
+                }
+                if (currentDetailOrgId === id) closeDetail();
                 loadOrganisations();
             } else {
-                UIUtils.showAlert(response.data?.error?.message || 'Error creating organisation', 'error');
+                UIUtils.showAlert(response.data?.error?.message || 'Error deleting organisation', 'error');
             }
+        };
+
+        // --- Detail panel (members + invitations) ---
+        window.openDetail = async (orgId, orgName) => {
+            currentDetailOrgId = orgId;
+            document.getElementById('orgDetailName').textContent = orgName;
+            document.getElementById('orgDetailPanel').style.display = 'block';
+            document.getElementById('orgDetailPanel').scrollIntoView({ behavior: 'smooth' });
+            setActiveTab('members');
+            await loadMembers();
+        };
+
+        window.closeDetail = () => {
+            document.getElementById('orgDetailPanel').style.display = 'none';
+            currentDetailOrgId = null;
+        };
+        document.getElementById('closeDetailBtn').addEventListener('click', closeDetail);
+
+        // Tabs
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const tab = btn.dataset.tab;
+                setActiveTab(tab);
+                if (tab === 'members') loadMembers();
+                else loadInvitations();
+            });
         });
 
-        document.getElementById('organisationSelect').addEventListener('change', (e) => {
-            if (e.target.value) {
-                ApiService.setSelectedOrg(e.target.value);
-            }
-        });
-
-        const savedOrg = ApiService.getSelectedOrg();
-        if (savedOrg) {
-            document.getElementById('organisationSelect').value = savedOrg;
+        function setActiveTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => {
+                const active = b.dataset.tab === tab;
+                b.style.borderBottom = active ? '2px solid var(--primary-color)' : 'none';
+                b.style.marginBottom = active ? '-2px' : '0';
+                b.style.color = active ? 'var(--primary-color)' : 'var(--secondary-color)';
+            });
+            document.getElementById('tab-members').style.display = tab === 'members' ? 'block' : 'none';
+            document.getElementById('tab-invitations').style.display = tab === 'invitations' ? 'block' : 'none';
         }
-        loadOrganisations();
+
+        // Invite form toggle
+        document.getElementById('inviteNewBtn').addEventListener('click', () => {
+            document.getElementById('inviteFormInline').style.display = 'block';
+        });
+        document.getElementById('cancelInviteFormBtn').addEventListener('click', () => {
+            document.getElementById('inviteFormInline').style.display = 'none';
+        });
+        document.getElementById('sendInviteBtn').addEventListener('click', async () => {
+            const email = document.getElementById('inviteEmail').value.trim();
+            const role = document.getElementById('inviteRole').value;
+            if (!email) { UIUtils.showAlert('Please enter an email address', 'error'); return; }
+            UIUtils.showLoading();
+            const response = await ApiService.createInvitation(currentDetailOrgId, email, role);
+            UIUtils.hideLoading();
+            if (response.ok) {
+                UIUtils.showAlert(`Invitation sent to ${email}. Token: ${response.data.token}`, 'success');
+                document.getElementById('inviteEmail').value = '';
+                document.getElementById('inviteFormInline').style.display = 'none';
+                loadInvitations();
+                setActiveTab('invitations');
+            } else {
+                UIUtils.showAlert(response.data?.error?.message || 'Error sending invitation', 'error');
+            }
+        });
+
+        // --- Load members ---
+        async function loadMembers() {
+            const container = document.getElementById('membersTable');
+            container.innerHTML = '<p>Loading...</p>';
+            const response = await ApiService.getMembers(currentDetailOrgId);
+            if (!response.ok) {
+                if (response.status === 403) {
+                    container.innerHTML = '<p style="color: var(--secondary-color);">You need Owner role to manage members.</p>';
+                } else {
+                    container.innerHTML = '<p style="color: var(--danger-color);">Failed to load members.</p>';
+                }
+                document.getElementById('inviteNewBtn').style.display = 'none';
+                return;
+            }
+            document.getElementById('inviteNewBtn').style.display = '';
+            const members = response.data;
+            container.innerHTML = `
+                <table>
+                    <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Joined</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${members.map(m => `
+                            <tr>
+                                <td>${escHtml(m.firstName + ' ' + m.lastName)}</td>
+                                <td>${escHtml(m.email)}</td>
+                                <td>
+                                    <select data-member-id="${m.id}" class="role-select" style="padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border-color);">
+                                        <option value="Viewer" ${m.role === 'Viewer' ? 'selected' : ''}>Viewer</option>
+                                        <option value="Bookkeeper" ${m.role === 'Bookkeeper' ? 'selected' : ''}>Bookkeeper</option>
+                                        <option value="Manager" ${m.role === 'Manager' ? 'selected' : ''}>Manager</option>
+                                        <option value="Owner" ${m.role === 'Owner' ? 'selected' : ''}>Owner</option>
+                                    </select>
+                                </td>
+                                <td>${UIUtils.formatDate(m.joinedAt)}</td>
+                                <td>
+                                    <div class="action-buttons">
+                                        <button class="btn btn-sm btn-secondary" onclick="saveRole('${m.id}')">Save Role</button>
+                                        <button class="btn btn-sm btn-danger" onclick="removeMember('${m.id}', '${escHtml(m.firstName + ' ' + m.lastName)}')">Remove</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>`;
+        }
+
+        window.saveRole = async (memberId) => {
+            const select = document.querySelector(`.role-select[data-member-id="${memberId}"]`);
+            const role = select.value;
+            UIUtils.showLoading();
+            const response = await ApiService.updateMemberRole(currentDetailOrgId, memberId, role);
+            UIUtils.hideLoading();
+            if (response.ok) {
+                UIUtils.showAlert('Role updated', 'success');
+            } else {
+                UIUtils.showAlert(response.data?.error?.message || 'Error updating role', 'error');
+                loadMembers();
+            }
+        };
+
+        window.removeMember = async (memberId, name) => {
+            if (!confirm(`Remove ${name} from this organisation?`)) return;
+            UIUtils.showLoading();
+            const response = await ApiService.removeMember(currentDetailOrgId, memberId);
+            UIUtils.hideLoading();
+            if (response.ok) {
+                UIUtils.showAlert(`${name} removed`, 'success');
+                loadMembers();
+            } else {
+                UIUtils.showAlert(response.data?.error?.message || 'Error removing member', 'error');
+            }
+        };
+
+        // --- Load invitations ---
+        async function loadInvitations() {
+            const container = document.getElementById('invitationsTable');
+            container.innerHTML = '<p>Loading...</p>';
+            const response = await ApiService.getInvitations(currentDetailOrgId);
+            if (!response.ok) {
+                container.innerHTML = '<p style="color: var(--secondary-color);">Unable to load invitations.</p>';
+                return;
+            }
+            const invitations = response.data;
+            if (invitations.length === 0) {
+                container.innerHTML = '<p style="color: var(--secondary-color);">No pending invitations.</p>';
+                return;
+            }
+            container.innerHTML = `
+                <table>
+                    <thead><tr><th>Email</th><th>Role</th><th>Invited By</th><th>Expires</th><th>Status</th><th>Actions</th></tr></thead>
+                    <tbody>
+                        ${invitations.map(inv => `
+                            <tr>
+                                <td>${escHtml(inv.invitedEmail)}</td>
+                                <td>${escHtml(inv.role)}</td>
+                                <td>${escHtml(inv.invitedByName || '-')}</td>
+                                <td>${UIUtils.formatDate(inv.expiresAt)}</td>
+                                <td>${inv.isAccepted ? '<span style="color:var(--success-color);">Accepted</span>' : '<span style="color:var(--warning-color);">Pending</span>'}</td>
+                                <td>
+                                    ${!inv.isAccepted ? `
+                                        <div>
+                                            <span style="font-family: monospace; font-size: 12px; background: #f0f0f0; padding: 2px 6px; border-radius: 3px;">${escHtml(inv.token)}</span>
+                                            <button class="btn btn-sm btn-danger" style="margin-left: 8px;" onclick="cancelInvite('${inv.id}')">Cancel</button>
+                                        </div>
+                                    ` : '-'}
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>`;
+        }
+
+        window.cancelInvite = async (invitationId) => {
+            if (!confirm('Cancel this invitation?')) return;
+            UIUtils.showLoading();
+            const response = await ApiService.cancelInvitation(currentDetailOrgId, invitationId);
+            UIUtils.hideLoading();
+            if (response.ok) {
+                UIUtils.showAlert('Invitation cancelled', 'success');
+                loadInvitations();
+            } else {
+                UIUtils.showAlert(response.data?.error?.message || 'Error cancelling invitation', 'error');
+            }
+        };
+
+        // Organisation selector
+        document.getElementById('organisationSelect').addEventListener('change', (e) => {
+            if (e.target.value) ApiService.setSelectedOrg(e.target.value);
+        });
 
         document.getElementById('logoutBtn').addEventListener('click', (e) => {
             e.preventDefault();
             ApiService.logout();
             window.location.href = 'login.html';
         });
+
+        function escHtml(str) {
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        loadOrganisations();
     </script>
 </body>
 </html>

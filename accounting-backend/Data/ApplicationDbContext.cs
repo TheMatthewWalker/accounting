@@ -12,6 +12,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<User> Users { get; set; }
     public DbSet<Organisation> Organisations { get; set; }
     public DbSet<OrganisationMember> OrganisationMembers { get; set; }
+    public DbSet<OrganisationInvitation> OrganisationInvitations { get; set; }
     public DbSet<GLAccount> GLAccounts { get; set; }
     public DbSet<DaybookEntry> DaybookEntries { get; set; }
     public DbSet<JournalEntry> JournalEntries { get; set; }
@@ -72,6 +73,17 @@ public class ApplicationDbContext : DbContext
             .WithMany(o => o.DaybookEntries)
             .HasForeignKey(de => de.OrganisationId)
             .OnDelete(DeleteBehavior.NoAction);
+        // Optional Customer/Supplier links
+        modelBuilder.Entity<DaybookEntry>()
+            .HasOne(de => de.Customer)
+            .WithMany()
+            .HasForeignKey(de => de.CustomerId)
+            .OnDelete(DeleteBehavior.SetNull);
+        modelBuilder.Entity<DaybookEntry>()
+            .HasOne(de => de.Supplier)
+            .WithMany()
+            .HasForeignKey(de => de.SupplierId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // JournalEntry configuration
         modelBuilder.Entity<JournalEntry>().HasKey(je => je.Id);
@@ -102,6 +114,21 @@ public class ApplicationDbContext : DbContext
             .HasOne(s => s.Organisation)
             .WithMany(o => o.Suppliers)
             .HasForeignKey(s => s.OrganisationId)
+            .OnDelete(DeleteBehavior.NoAction);
+
+        // OrganisationInvitation configuration
+        modelBuilder.Entity<OrganisationInvitation>().HasKey(i => i.Id);
+        modelBuilder.Entity<OrganisationInvitation>()
+            .HasIndex(i => i.Token).IsUnique();
+        modelBuilder.Entity<OrganisationInvitation>()
+            .HasOne(i => i.Organisation)
+            .WithMany()
+            .HasForeignKey(i => i.OrganisationId)
+            .OnDelete(DeleteBehavior.Cascade);
+        modelBuilder.Entity<OrganisationInvitation>()
+            .HasOne(i => i.InvitedByUser)
+            .WithMany()
+            .HasForeignKey(i => i.InvitedByUserId)
             .OnDelete(DeleteBehavior.NoAction);
 
         // AccountBalance configuration

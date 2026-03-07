@@ -116,6 +116,44 @@ class ApiService {
         return this.request(`${API_BASE_URL}/organisations`);
     }
 
+    static async updateOrganisation(id, data) {
+        return this.request(`${API_BASE_URL}/organisations/${id}`, 'PUT', data);
+    }
+
+    static async deleteOrganisation(id) {
+        return this.request(`${API_BASE_URL}/organisations/${id}`, 'DELETE');
+    }
+
+    // Organisation Members
+    static async getMembers(orgId) {
+        return this.request(`${API_BASE_URL}/organisations/${orgId}/members`);
+    }
+
+    static async updateMemberRole(orgId, memberId, role) {
+        return this.request(`${API_BASE_URL}/organisations/${orgId}/members/${memberId}`, 'PUT', { role });
+    }
+
+    static async removeMember(orgId, memberId) {
+        return this.request(`${API_BASE_URL}/organisations/${orgId}/members/${memberId}`, 'DELETE');
+    }
+
+    // Organisation Invitations
+    static async getInvitations(orgId) {
+        return this.request(`${API_BASE_URL}/organisations/${orgId}/invitations`);
+    }
+
+    static async createInvitation(orgId, email, role) {
+        return this.request(`${API_BASE_URL}/organisations/${orgId}/invitations`, 'POST', { invitedEmail: email, role });
+    }
+
+    static async cancelInvitation(orgId, invitationId) {
+        return this.request(`${API_BASE_URL}/organisations/${orgId}/invitations/${invitationId}`, 'DELETE');
+    }
+
+    static async acceptInvitation(token) {
+        return this.request(`${API_BASE_URL}/organisations/invitations/accept`, 'POST', { token });
+    }
+
     // GL Account Endpoints
     static async createGLAccount(organisationId, account) {
         return this.request(
@@ -155,6 +193,22 @@ class ApiService {
             'POST',
             entry
         );
+    }
+
+    static async createSalesDaybookEntry(organisationId, entry) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/sales`, 'POST', entry);
+    }
+
+    static async createPurchaseDaybookEntry(organisationId, entry) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/purchases`, 'POST', entry);
+    }
+
+    static async createReceiptDaybookEntry(organisationId, entry) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/receipts`, 'POST', entry);
+    }
+
+    static async createPaymentDaybookEntry(organisationId, entry) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/payments`, 'POST', entry);
     }
 
     static async getDaybookEntries(organisationId, fromDate = null, toDate = null) {

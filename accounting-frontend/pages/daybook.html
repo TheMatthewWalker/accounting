@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daybook - AccuBooks</title>
     <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .daybook-type-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
+        .daybook-type-btns button { padding: 8px 16px; border-radius: 6px; border: 2px solid var(--border-color); background: white; cursor: pointer; font-size: 13px; }
+        .daybook-type-btns button:hover { border-color: var(--primary-color); color: var(--primary-color); }
+        .entry-lines-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+        .entry-lines-table th { background: var(--light-bg); padding: 8px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--border-color); }
+        .entry-lines-table td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; }
+        .entry-lines-table td input, .entry-lines-table td select { width: 100%; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; }
+        .entry-total { text-align: right; font-weight: 600; padding: 8px; background: var(--light-bg); border-radius: 4px; margin-bottom: 15px; }
+    </style>
 </head>
 <body>
     <div class="dashboard">
@@ -30,54 +40,207 @@
 
         <main class="main-content">
             <div class="dashboard-header">
-                <h1>Daybook Entries</h1>
+                <h1>Daybook</h1>
                 <p>Record your business transactions</p>
             </div>
 
-            <div style="margin-bottom: 20px;">
-                <button id="newEntryBtn" class="btn btn-primary">+ New Entry</button>
+            <div class="daybook-type-btns">
+                <button onclick="showForm('sales')">🧾 Sales Invoice</button>
+                <button onclick="showForm('purchase')">🛒 Purchase Invoice</button>
+                <button onclick="showForm('receipt')">💰 Receipt</button>
+                <button onclick="showForm('payment')">💸 Payment</button>
+                <button onclick="showForm('journal')">📓 Manual Journal</button>
             </div>
 
-            <div id="entryFormContainer" style="display: none; margin-bottom: 30px; background: var(--light-bg); padding: 20px; border-radius: 8px;">
-                <h3>New Daybook Entry</h3>
-                <form id="daybookForm">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <div class="form-group">
-                            <label>Entry Type</label>
-                            <select name="type" required>
-                                <option value="">Select Type</option>
-                                <option value="Sales">Sales</option>
-                                <option value="Purchase">Purchase</option>
-                                <option value="Journal">Journal</option>
-                                <option value="Bank">Bank</option>
-                                <option value="Receipt">Receipt</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label>Reference Number</label>
-                            <input type="text" name="referenceNumber">
-                        </div>
-                        <div class="form-group">
-                            <label>Entry Date</label>
-                            <input type="date" name="entryDate" required>
-                        </div>
-                        <div class="form-group">
-                            <label>Description</label>
-                            <input type="text" name="description">
-                        </div>
+            <!-- SALES INVOICE FORM -->
+            <div id="form-sales" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3>Sales Invoice</h3>
+                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">DR Accounts Receivable / CR Revenue / CR VAT (auto-posted to GL)</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div class="form-group">
+                        <label>Customer *</label>
+                        <select id="sales-customer" required><option value="">Select customer</option></select>
                     </div>
-
-                    <h4 style="margin-top: 20px; margin-bottom: 15px;">Journal Lines</h4>
-                    <div id="journalLines" style="margin-bottom: 15px;"></div>
-                    <button type="button" id="addLineBtn" class="btn btn-secondary btn-sm" style="margin-bottom: 20px;">+ Add Line</button>
-
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <button type="submit" class="btn btn-success">Create Entry</button>
-                        <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    <div class="form-group">
+                        <label>Invoice Date *</label>
+                        <input type="date" id="sales-date" required>
                     </div>
-                </form>
+                    <div class="form-group">
+                        <label>Invoice / Reference No.</label>
+                        <input type="text" id="sales-ref" placeholder="INV-001">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="sales-desc" placeholder="Optional description">
+                    </div>
+                    <div class="form-group">
+                        <label>VAT Account (optional)</label>
+                        <select id="sales-vat-account"><option value="">No VAT</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>VAT Rate %</label>
+                        <input type="number" id="sales-vat-rate" value="0" step="0.01" min="0" max="100">
+                    </div>
+                </div>
+                <h4>Invoice Lines</h4>
+                <table class="entry-lines-table">
+                    <thead><tr><th>Revenue Account</th><th>Description</th><th>Amount (excl. VAT)</th><th></th></tr></thead>
+                    <tbody id="sales-lines"></tbody>
+                </table>
+                <button class="btn btn-secondary btn-sm" onclick="addSalesLine()">+ Add Line</button>
+                <div class="entry-total" id="sales-total">Total: £0.00 (+ £0.00 VAT)</div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-success" onclick="submitSales()">Create Sales Invoice</button>
+                    <button class="btn btn-secondary" onclick="hideForm('sales')">Cancel</button>
+                </div>
             </div>
 
+            <!-- PURCHASE INVOICE FORM -->
+            <div id="form-purchase" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3>Purchase Invoice</h3>
+                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">DR Expense / DR VAT / CR Accounts Payable (auto-posted to GL)</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div class="form-group">
+                        <label>Supplier *</label>
+                        <select id="purch-supplier" required><option value="">Select supplier</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Invoice Date *</label>
+                        <input type="date" id="purch-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Supplier Invoice No.</label>
+                        <input type="text" id="purch-ref" placeholder="SINV-001">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="purch-desc" placeholder="Optional description">
+                    </div>
+                    <div class="form-group">
+                        <label>VAT Account (optional)</label>
+                        <select id="purch-vat-account"><option value="">No VAT</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>VAT Rate %</label>
+                        <input type="number" id="purch-vat-rate" value="0" step="0.01" min="0" max="100">
+                    </div>
+                </div>
+                <h4>Invoice Lines</h4>
+                <table class="entry-lines-table">
+                    <thead><tr><th>Expense Account</th><th>Description</th><th>Amount (excl. VAT)</th><th></th></tr></thead>
+                    <tbody id="purch-lines"></tbody>
+                </table>
+                <button class="btn btn-secondary btn-sm" onclick="addPurchLine()">+ Add Line</button>
+                <div class="entry-total" id="purch-total">Total: £0.00 (+ £0.00 VAT)</div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-success" onclick="submitPurchase()">Create Purchase Invoice</button>
+                    <button class="btn btn-secondary" onclick="hideForm('purchase')">Cancel</button>
+                </div>
+            </div>
+
+            <!-- RECEIPT FORM -->
+            <div id="form-receipt" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3>Receipt (Cash / Bank)</h3>
+                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">DR Bank / CR Account (auto-posted to GL)</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label>Bank / Cash Account *</label>
+                        <select id="rcpt-bank" required><option value="">Select account</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Credit Account * (e.g. AR / Revenue)</label>
+                        <select id="rcpt-credit" required><option value="">Select account</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Date *</label>
+                        <input type="date" id="rcpt-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount *</label>
+                        <input type="number" id="rcpt-amount" step="0.01" min="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Reference</label>
+                        <input type="text" id="rcpt-ref" placeholder="REC-001">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="rcpt-desc" placeholder="Optional">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn btn-success" onclick="submitReceipt()">Create Receipt</button>
+                    <button class="btn btn-secondary" onclick="hideForm('receipt')">Cancel</button>
+                </div>
+            </div>
+
+            <!-- PAYMENT FORM -->
+            <div id="form-payment" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3>Payment (Cash / Bank)</h3>
+                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">DR Account / CR Bank (auto-posted to GL)</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label>Bank / Cash Account *</label>
+                        <select id="pay-bank" required><option value="">Select account</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Debit Account * (e.g. AP / Expense)</label>
+                        <select id="pay-debit" required><option value="">Select account</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Date *</label>
+                        <input type="date" id="pay-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Amount *</label>
+                        <input type="number" id="pay-amount" step="0.01" min="0.01" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Reference</label>
+                        <input type="text" id="pay-ref" placeholder="PAY-001">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="pay-desc" placeholder="Optional">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn btn-success" onclick="submitPayment()">Create Payment</button>
+                    <button class="btn btn-secondary" onclick="hideForm('payment')">Cancel</button>
+                </div>
+            </div>
+
+            <!-- MANUAL JOURNAL FORM -->
+            <div id="form-journal" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3>Manual Journal Entry</h3>
+                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">Enter GL lines directly. Debits must equal Credits.</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                    <div class="form-group">
+                        <label>Date *</label>
+                        <input type="date" id="jnl-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Reference</label>
+                        <input type="text" id="jnl-ref" placeholder="JNL-001">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="jnl-desc" placeholder="Optional">
+                    </div>
+                </div>
+                <table class="entry-lines-table">
+                    <thead><tr><th>GL Account</th><th>Description</th><th>Debit</th><th>Credit</th><th></th></tr></thead>
+                    <tbody id="jnl-lines"></tbody>
+                </table>
+                <button class="btn btn-secondary btn-sm" onclick="addJournalLine()">+ Add Line</button>
+                <div class="entry-total" id="jnl-total">DR £0.00 / CR £0.00</div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-success" onclick="submitJournal()">Create Journal</button>
+                    <button class="btn btn-secondary" onclick="hideForm('journal')">Cancel</button>
+                </div>
+            </div>
+
+            <!-- ENTRIES TABLE -->
             <div class="table-container">
                 <table>
                     <thead>
@@ -86,15 +249,13 @@
                             <th>Type</th>
                             <th>Reference</th>
                             <th>Description</th>
-                            <th>Total Debit</th>
+                            <th>Amount</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="entriesTable">
-                        <tr>
-                            <td colspan="7" style="text-align: center; color: var(--secondary-color);">Loading...</td>
-                        </tr>
+                        <tr><td colspan="7" style="text-align: center; color: var(--secondary-color);">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -108,188 +269,371 @@
             window.location.href = 'login.html';
         }
 
-        // UI Controls
-        const newEntryBtn = document.getElementById('newEntryBtn');
-        const cancelBtn = document.getElementById('cancelBtn');
-        const entryFormContainer = document.getElementById('entryFormContainer');
-        const daybookForm = document.getElementById('daybookForm');
-        const addLineBtn = document.getElementById('addLineBtn');
-        const journalLines = document.getElementById('journalLines');
-
-        let lineCount = 0;
         let glAccounts = [];
+        let customers = [];
+        let suppliers = [];
 
-        newEntryBtn.addEventListener('click', () => {
-            entryFormContainer.style.display = 'block';
-            daybookForm.reset();
-            journalLines.innerHTML = '';
-            lineCount = 0;
-        });
-
-        cancelBtn.addEventListener('click', () => {
-            entryFormContainer.style.display = 'none';
-        });
-
-        // Add journal line
-        addLineBtn.addEventListener('click', () => {
-            const accountOptions = glAccounts.map(acc => `<option value="${acc.id}">${acc.code} - ${acc.name}</option>`).join('');
-            const lineHtml = `
-                <div class="journal-line" style="display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-bottom: 10px; align-items: flex-end;">
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label>GL Account</label>
-                        <select name="glAccounts[${lineCount}]" required>
-                            <option value="">Select Account</option>
-                            ${accountOptions}
-                        </select>
-                    </div>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label>Debit</label>
-                        <input type="number" name="debits[${lineCount}]" step="0.01" value="0">
-                    </div>
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <label>Credit</label>
-                        <input type="number" name="credits[${lineCount}]" step="0.01" value="0">
-                    </div>
-                    <button type="button" class="btn btn-sm btn-danger" onclick="removeLine(${lineCount})">Remove</button>
-                </div>
-            `;
-            journalLines.insertAdjacentHTML('beforeend', lineHtml);
-            lineCount++;
-        });
-
-        window.removeLine = (index) => {
-            document.querySelector(`[onclick="removeLine(${index})"]`).parentElement.remove();
+        // ---- Form show/hide ----
+        window.showForm = (type) => {
+            document.querySelectorAll('.entry-form').forEach(f => f.style.display = 'none');
+            document.getElementById(`form-${type}`).style.display = 'block';
+            document.getElementById(`form-${type}`).scrollIntoView({ behavior: 'smooth' });
+        };
+        window.hideForm = (type) => {
+            document.getElementById(`form-${type}`).style.display = 'none';
         };
 
-        // Load entries
-        async function loadEntries() {
-            const orgId = ApiService.getSelectedOrg();
-            if (!orgId) return;
-
-            try {
-                // Load GL Accounts for dropdown
-                const accountsResponse = await ApiService.getGLAccounts(orgId);
-                if (accountsResponse.ok) {
-                    glAccounts = accountsResponse.data;
-                }
-
-                const response = await ApiService.getDaybookEntries(orgId);
-                if (response.ok) {
-                    const entries = response.data;
-                    if (entries.length === 0) {
-                        document.getElementById('entriesTable').innerHTML = '<tr><td colspan="7" style="text-align: center;">No entries yet</td></tr>';
-                    } else {
-                        document.getElementById('entriesTable').innerHTML = entries.map(entry => {
-                            const totalDebit = entry.lines.reduce((sum, line) => sum + line.debitAmount, 0);
-                            return `
-                                <tr>
-                                    <td>${UIUtils.formatDate(entry.entryDate)}</td>
-                                    <td>${entry.type}</td>
-                                    <td>${entry.referenceNumber || '-'}</td>
-                                    <td>${entry.description || '-'}</td>
-                                    <td>${UIUtils.formatCurrency(totalDebit)}</td>
-                                    <td>${entry.isPosted ? '<span style="color: var(--success-color);">✓ Posted</span>' : '<span style="color: var(--warning-color);">⏳ Pending</span>'}</td>
-                                    <td>
-                                        <div class="action-buttons">
-                                            <a href="#${entry.id}" class="btn btn-sm btn-primary">View</a>
-                                            ${!entry.isPosted ? `<button class="btn btn-sm btn-success" onclick="postEntry('${entry.id}')">Post</button>` : ''}
-                                            ${!entry.isPosted ? `<button class="btn btn-sm btn-danger" onclick="deleteEntry('${entry.id}')">Delete</button>` : ''}
-                                        </div>
-                                    </td>
-                                </tr>
-                            `;
-                        }).join('');
-                    }
-                }
-            } catch (error) {
-                UIUtils.showAlert('Error loading entries', 'error');
-            }
+        // ---- Account options helper ----
+        function accountOptions(filterFn) {
+            const accounts = filterFn ? glAccounts.filter(filterFn) : glAccounts;
+            return accounts.map(a => `<option value="${a.id}">${a.code} – ${a.name}</option>`).join('');
         }
 
-        // Create entry
-        daybookForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
+        function populateSelect(id, filterFn) {
+            const sel = document.getElementById(id);
+            if (!sel) return;
+            const prev = sel.value;
+            sel.innerHTML = `<option value="">Select account</option>${accountOptions(filterFn)}`;
+            if (prev) sel.value = prev;
+        }
 
+        // ---- Sales lines ----
+        let salesLineCount = 0;
+        window.addSalesLine = () => {
+            const i = salesLineCount++;
+            document.getElementById('sales-lines').insertAdjacentHTML('beforeend', `
+                <tr id="sl-${i}">
+                    <td><select onchange="updateSalesTotal()">${accountOptions()}</select></td>
+                    <td><input type="text" placeholder="Line description"></td>
+                    <td><input type="number" step="0.01" value="0" onchange="updateSalesTotal()" oninput="updateSalesTotal()"></td>
+                    <td><button class="btn btn-sm btn-danger" onclick="document.getElementById('sl-${i}').remove(); updateSalesTotal()">✕</button></td>
+                </tr>`);
+        };
+        window.updateSalesTotal = () => {
+            const rows = document.querySelectorAll('#sales-lines tr');
+            let total = 0;
+            rows.forEach(r => { total += parseFloat(r.querySelectorAll('input[type=number]')[0]?.value || 0); });
+            const vatRate = parseFloat(document.getElementById('sales-vat-rate').value || 0);
+            const vat = total * vatRate / 100;
+            document.getElementById('sales-total').textContent = `Total: ${UIUtils.formatCurrency(total)} (+ ${UIUtils.formatCurrency(vat)} VAT = ${UIUtils.formatCurrency(total + vat)})`;
+        };
+        document.getElementById('sales-vat-rate').addEventListener('input', updateSalesTotal);
+
+        window.submitSales = async () => {
             const orgId = ApiService.getSelectedOrg();
-            if (!orgId) {
-                UIUtils.showAlert('Please select an organisation', 'error');
-                return;
-            }
+            if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
+            const customerId = document.getElementById('sales-customer').value;
+            const date = document.getElementById('sales-date').value;
+            if (!customerId || !date) { UIUtils.showAlert('Customer and date are required', 'error'); return; }
 
-            // Collect journal lines
             const lines = [];
-            document.querySelectorAll('.journal-line').forEach(lineDiv => {
-                const select = lineDiv.querySelector('select');
-                const debit = parseFloat(lineDiv.querySelector('input[name^="debits"]').value);
-                const credit = parseFloat(lineDiv.querySelector('input[name^="credits"]').value);
-                if (select.value) {
-                    lines.push({
-                        glAccountId: select.value,
-                        debitAmount: debit,
-                        creditAmount: credit
-                    });
-                }
+            document.querySelectorAll('#sales-lines tr').forEach(r => {
+                const accountId = r.querySelector('select')?.value;
+                const desc = r.querySelectorAll('input')[0]?.value;
+                const amount = parseFloat(r.querySelectorAll('input[type=number]')[0]?.value || 0);
+                if (accountId && amount > 0) lines.push({ revenueAccountId: accountId, description: desc, amount });
             });
+            if (lines.length === 0) { UIUtils.showAlert('Add at least one line', 'error'); return; }
 
-            const entryData = {
-                type: daybookForm.querySelector('select[name="type"]').value,
-                referenceNumber: daybookForm.querySelector('input[name="referenceNumber"]').value,
-                entryDate: daybookForm.querySelector('input[name="entryDate"]').value,
-                description: daybookForm.querySelector('input[name="description"]').value,
-                lines: lines
-            };
-
-            // Validate debits = credits
-            const totalDebits = lines.reduce((sum, line) => sum + line.debitAmount, 0);
-            const totalCredits = lines.reduce((sum, line) => sum + line.creditAmount, 0);
-
-            if (Math.abs(totalDebits - totalCredits) > 0.01) {
-                UIUtils.showAlert('Debits must equal Credits!', 'error');
-                return;
-            }
+            const vatAccountId = document.getElementById('sales-vat-account').value || null;
+            const vatRate = parseFloat(document.getElementById('sales-vat-rate').value || 0);
 
             UIUtils.showLoading();
-            const response = await ApiService.createDaybookEntry(orgId, entryData);
+            const response = await ApiService.createSalesDaybookEntry(orgId, {
+                customerId,
+                entryDate: date,
+                referenceNumber: document.getElementById('sales-ref').value || null,
+                description: document.getElementById('sales-desc').value || null,
+                vatAccountId,
+                vatRate,
+                lines
+            });
             UIUtils.hideLoading();
-
             if (response.ok) {
-                UIUtils.showAlert('Entry created successfully!', 'success');
-                entryFormContainer.style.display = 'none';
+                UIUtils.showAlert('Sales invoice created', 'success');
+                hideForm('sales');
+                document.getElementById('sales-lines').innerHTML = '';
+                salesLineCount = 0;
                 loadEntries();
             } else {
                 UIUtils.showAlert(response.data?.error?.message || 'Error creating entry', 'error');
             }
-        });
+        };
+
+        // ---- Purchase lines ----
+        let purchLineCount = 0;
+        window.addPurchLine = () => {
+            const i = purchLineCount++;
+            document.getElementById('purch-lines').insertAdjacentHTML('beforeend', `
+                <tr id="pl-${i}">
+                    <td><select onchange="updatePurchTotal()">${accountOptions()}</select></td>
+                    <td><input type="text" placeholder="Line description"></td>
+                    <td><input type="number" step="0.01" value="0" onchange="updatePurchTotal()" oninput="updatePurchTotal()"></td>
+                    <td><button class="btn btn-sm btn-danger" onclick="document.getElementById('pl-${i}').remove(); updatePurchTotal()">✕</button></td>
+                </tr>`);
+        };
+        window.updatePurchTotal = () => {
+            const rows = document.querySelectorAll('#purch-lines tr');
+            let total = 0;
+            rows.forEach(r => { total += parseFloat(r.querySelectorAll('input[type=number]')[0]?.value || 0); });
+            const vatRate = parseFloat(document.getElementById('purch-vat-rate').value || 0);
+            const vat = total * vatRate / 100;
+            document.getElementById('purch-total').textContent = `Total: ${UIUtils.formatCurrency(total)} (+ ${UIUtils.formatCurrency(vat)} VAT = ${UIUtils.formatCurrency(total + vat)})`;
+        };
+        document.getElementById('purch-vat-rate').addEventListener('input', updatePurchTotal);
+
+        window.submitPurchase = async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
+            const supplierId = document.getElementById('purch-supplier').value;
+            const date = document.getElementById('purch-date').value;
+            if (!supplierId || !date) { UIUtils.showAlert('Supplier and date are required', 'error'); return; }
+
+            const lines = [];
+            document.querySelectorAll('#purch-lines tr').forEach(r => {
+                const accountId = r.querySelector('select')?.value;
+                const desc = r.querySelectorAll('input')[0]?.value;
+                const amount = parseFloat(r.querySelectorAll('input[type=number]')[0]?.value || 0);
+                if (accountId && amount > 0) lines.push({ expenseAccountId: accountId, description: desc, amount });
+            });
+            if (lines.length === 0) { UIUtils.showAlert('Add at least one line', 'error'); return; }
+
+            const vatAccountId = document.getElementById('purch-vat-account').value || null;
+            const vatRate = parseFloat(document.getElementById('purch-vat-rate').value || 0);
+
+            UIUtils.showLoading();
+            const response = await ApiService.createPurchaseDaybookEntry(orgId, {
+                supplierId,
+                entryDate: date,
+                referenceNumber: document.getElementById('purch-ref').value || null,
+                description: document.getElementById('purch-desc').value || null,
+                vatAccountId,
+                vatRate,
+                lines
+            });
+            UIUtils.hideLoading();
+            if (response.ok) {
+                UIUtils.showAlert('Purchase invoice created', 'success');
+                hideForm('purchase');
+                document.getElementById('purch-lines').innerHTML = '';
+                purchLineCount = 0;
+                loadEntries();
+            } else {
+                UIUtils.showAlert(response.data?.error?.message || 'Error creating entry', 'error');
+            }
+        };
+
+        // ---- Receipt ----
+        window.submitReceipt = async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
+            const bankAccountId = document.getElementById('rcpt-bank').value;
+            const creditAccountId = document.getElementById('rcpt-credit').value;
+            const date = document.getElementById('rcpt-date').value;
+            const amount = parseFloat(document.getElementById('rcpt-amount').value);
+            if (!bankAccountId || !creditAccountId || !date || !(amount > 0)) {
+                UIUtils.showAlert('Bank account, credit account, date and amount are required', 'error'); return;
+            }
+            UIUtils.showLoading();
+            const response = await ApiService.createReceiptDaybookEntry(orgId, {
+                bankAccountId,
+                creditAccountId,
+                entryDate: date,
+                amount,
+                referenceNumber: document.getElementById('rcpt-ref').value || null,
+                description: document.getElementById('rcpt-desc').value || null,
+            });
+            UIUtils.hideLoading();
+            if (response.ok) {
+                UIUtils.showAlert('Receipt created', 'success');
+                hideForm('receipt');
+                loadEntries();
+            } else {
+                UIUtils.showAlert(response.data?.error?.message || 'Error creating receipt', 'error');
+            }
+        };
+
+        // ---- Payment ----
+        window.submitPayment = async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
+            const bankAccountId = document.getElementById('pay-bank').value;
+            const debitAccountId = document.getElementById('pay-debit').value;
+            const date = document.getElementById('pay-date').value;
+            const amount = parseFloat(document.getElementById('pay-amount').value);
+            if (!bankAccountId || !debitAccountId || !date || !(amount > 0)) {
+                UIUtils.showAlert('Bank account, debit account, date and amount are required', 'error'); return;
+            }
+            UIUtils.showLoading();
+            const response = await ApiService.createPaymentDaybookEntry(orgId, {
+                bankAccountId,
+                debitAccountId,
+                entryDate: date,
+                amount,
+                referenceNumber: document.getElementById('pay-ref').value || null,
+                description: document.getElementById('pay-desc').value || null,
+            });
+            UIUtils.hideLoading();
+            if (response.ok) {
+                UIUtils.showAlert('Payment created', 'success');
+                hideForm('payment');
+                loadEntries();
+            } else {
+                UIUtils.showAlert(response.data?.error?.message || 'Error creating payment', 'error');
+            }
+        };
+
+        // ---- Manual Journal ----
+        let jnlLineCount = 0;
+        window.addJournalLine = () => {
+            const i = jnlLineCount++;
+            document.getElementById('jnl-lines').insertAdjacentHTML('beforeend', `
+                <tr id="jl-${i}">
+                    <td><select>${accountOptions()}</select></td>
+                    <td><input type="text" placeholder="Description"></td>
+                    <td><input type="number" step="0.01" value="0" oninput="updateJournalTotal()"></td>
+                    <td><input type="number" step="0.01" value="0" oninput="updateJournalTotal()"></td>
+                    <td><button class="btn btn-sm btn-danger" onclick="document.getElementById('jl-${i}').remove(); updateJournalTotal()">✕</button></td>
+                </tr>`);
+        };
+        window.updateJournalTotal = () => {
+            let dr = 0, cr = 0;
+            document.querySelectorAll('#jnl-lines tr').forEach(r => {
+                const inputs = r.querySelectorAll('input[type=number]');
+                dr += parseFloat(inputs[0]?.value || 0);
+                cr += parseFloat(inputs[1]?.value || 0);
+            });
+            const balanced = Math.abs(dr - cr) < 0.01;
+            document.getElementById('jnl-total').textContent = `DR ${UIUtils.formatCurrency(dr)} / CR ${UIUtils.formatCurrency(cr)}${balanced ? ' ✓' : ' ⚠ Not balanced'}`;
+            document.getElementById('jnl-total').style.color = balanced ? '' : 'var(--danger-color)';
+        };
+
+        window.submitJournal = async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
+            const date = document.getElementById('jnl-date').value;
+            if (!date) { UIUtils.showAlert('Date is required', 'error'); return; }
+
+            const lines = [];
+            document.querySelectorAll('#jnl-lines tr').forEach(r => {
+                const accountId = r.querySelector('select')?.value;
+                const desc = r.querySelectorAll('input')[0]?.value;
+                const dr = parseFloat(r.querySelectorAll('input[type=number]')[0]?.value || 0);
+                const cr = parseFloat(r.querySelectorAll('input[type=number]')[1]?.value || 0);
+                if (accountId) lines.push({ glAccountId: accountId, description: desc, debitAmount: dr, creditAmount: cr });
+            });
+
+            const totalDr = lines.reduce((s, l) => s + l.debitAmount, 0);
+            const totalCr = lines.reduce((s, l) => s + l.creditAmount, 0);
+            if (Math.abs(totalDr - totalCr) > 0.01) { UIUtils.showAlert('Debits must equal Credits', 'error'); return; }
+
+            UIUtils.showLoading();
+            const response = await ApiService.createDaybookEntry(orgId, {
+                entryDate: date,
+                referenceNumber: document.getElementById('jnl-ref').value || null,
+                description: document.getElementById('jnl-desc').value || null,
+                lines
+            });
+            UIUtils.hideLoading();
+            if (response.ok) {
+                UIUtils.showAlert('Journal entry created', 'success');
+                hideForm('journal');
+                document.getElementById('jnl-lines').innerHTML = '';
+                jnlLineCount = 0;
+                loadEntries();
+            } else {
+                UIUtils.showAlert(response.data?.error?.message || 'Error creating journal', 'error');
+            }
+        };
+
+        // ---- Load entries list ----
+        async function loadEntries() {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) return;
+
+            const [accountsRes, entriesRes, custRes, suppRes] = await Promise.all([
+                ApiService.getGLAccounts(orgId),
+                ApiService.getDaybookEntries(orgId),
+                ApiService.getCustomers(orgId),
+                ApiService.getSuppliers(orgId),
+            ]);
+
+            if (accountsRes.ok) {
+                glAccounts = accountsRes.data;
+                populateSelect('sales-vat-account');
+                populateSelect('purch-vat-account');
+                populateSelect('rcpt-bank');
+                populateSelect('rcpt-credit');
+                populateSelect('pay-bank');
+                populateSelect('pay-debit');
+                // Prepend "No VAT" for VAT selects
+                document.getElementById('sales-vat-account').innerHTML = `<option value="">No VAT</option>${accountOptions()}`;
+                document.getElementById('purch-vat-account').innerHTML = `<option value="">No VAT</option>${accountOptions()}`;
+            }
+            if (custRes.ok) {
+                customers = custRes.data;
+                const opts = customers.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
+                document.getElementById('sales-customer').innerHTML = `<option value="">Select customer</option>${opts}`;
+            }
+            if (suppRes.ok) {
+                suppliers = suppRes.data;
+                const opts = suppliers.map(s => `<option value="${s.id}">${escHtml(s.name)}</option>`).join('');
+                document.getElementById('purch-supplier').innerHTML = `<option value="">Select supplier</option>${opts}`;
+            }
+
+            if (!entriesRes.ok) return;
+            const entries = entriesRes.data;
+            const tbody = document.getElementById('entriesTable');
+            if (entries.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No entries yet. Use the buttons above to create one.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = entries.map(entry => {
+                const totalDebit = entry.lines?.reduce((sum, l) => sum + l.debitAmount, 0) ?? 0;
+                const typeLabel = { Sales: '🧾 Sales', Purchase: '🛒 Purchase', Receipt: '💰 Receipt', Payment: '💸 Payment', Journal: '📓 Journal' }[entry.type] || entry.type;
+                return `
+                    <tr>
+                        <td>${UIUtils.formatDate(entry.entryDate)}</td>
+                        <td>${typeLabel}</td>
+                        <td>${escHtml(entry.referenceNumber || '-')}</td>
+                        <td>${escHtml(entry.description || '-')}</td>
+                        <td>${UIUtils.formatCurrency(totalDebit)}</td>
+                        <td>${entry.isPosted ? '<span style="color:var(--success-color);">✓ Posted</span>' : '<span style="color:var(--warning-color);">⏳ Draft</span>'}</td>
+                        <td>
+                            <div class="action-buttons">
+                                ${!entry.isPosted ? `<button class="btn btn-sm btn-success" onclick="postEntry('${entry.id}')">Post</button>` : ''}
+                                ${!entry.isPosted ? `<button class="btn btn-sm btn-danger" onclick="deleteEntry('${entry.id}')">Delete</button>` : ''}
+                            </div>
+                        </td>
+                    </tr>`;
+            }).join('');
+        }
 
         window.postEntry = async (entryId) => {
             const orgId = ApiService.getSelectedOrg();
             const response = await ApiService.postDaybookEntry(orgId, entryId);
-            if (response.ok) {
-                UIUtils.showAlert('Entry posted successfully', 'success');
-                loadEntries();
-            } else {
-                UIUtils.showAlert('Error posting entry', 'error');
-            }
+            if (response.ok) { UIUtils.showAlert('Entry posted', 'success'); loadEntries(); }
+            else UIUtils.showAlert(response.data?.error?.message || 'Error posting entry', 'error');
         };
 
         window.deleteEntry = async (entryId) => {
-            if (confirm('Delete this entry?')) {
-                const orgId = ApiService.getSelectedOrg();
-                const response = await ApiService.deleteDaybookEntry(orgId, entryId);
-                if (response.ok) {
-                    UIUtils.showAlert('Entry deleted', 'success');
-                    loadEntries();
-                }
-            }
+            if (!confirm('Delete this entry?')) return;
+            const orgId = ApiService.getSelectedOrg();
+            const response = await ApiService.deleteDaybookEntry(orgId, entryId);
+            if (response.ok) { UIUtils.showAlert('Entry deleted', 'success'); loadEntries(); }
         };
 
-        // Organization selector
         document.getElementById('organisationSelect').addEventListener('change', (e) => {
-            if (e.target.value) {
-                ApiService.setSelectedOrg(e.target.value);
-                loadEntries();
-            }
+            if (e.target.value) { ApiService.setSelectedOrg(e.target.value); loadEntries(); }
         });
+
+        document.getElementById('logoutBtn').addEventListener('click', (e) => {
+            e.preventDefault(); ApiService.logout(); window.location.href = 'login.html';
+        });
+
+        function escHtml(str) {
+            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
 
         await ApiService.populateOrganisationSelector();
         loadEntries();

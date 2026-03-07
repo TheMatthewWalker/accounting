@@ -4,6 +4,7 @@ using AccountingApp.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AccountingApp.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260307090327_AddCustomerSupplierToDaybookEntry")]
+    partial class AddCustomerSupplierToDaybookEntry
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -264,51 +267,6 @@ namespace AccountingApp.Migrations
                     b.ToTable("Organisations");
                 });
 
-            modelBuilder.Entity("AccountingApp.Models.OrganisationInvitation", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime>("ExpiresAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<Guid>("InvitedByUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("InvitedEmail")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<bool>("IsAccepted")
-                        .HasColumnType("bit");
-
-                    b.Property<Guid>("OrganisationId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("Token")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(450)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("InvitedByUserId");
-
-                    b.HasIndex("OrganisationId");
-
-                    b.HasIndex("Token")
-                        .IsUnique();
-
-                    b.ToTable("OrganisationInvitations");
-                });
-
             modelBuilder.Entity("AccountingApp.Models.OrganisationMember", b =>
                 {
                     b.Property<Guid>("Id")
@@ -532,25 +490,6 @@ namespace AccountingApp.Migrations
                     b.Navigation("DaybookEntry");
 
                     b.Navigation("GLAccount");
-                });
-
-            modelBuilder.Entity("AccountingApp.Models.OrganisationInvitation", b =>
-                {
-                    b.HasOne("AccountingApp.Models.User", "InvitedByUser")
-                        .WithMany()
-                        .HasForeignKey("InvitedByUserId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
-
-                    b.HasOne("AccountingApp.Models.Organisation", "Organisation")
-                        .WithMany()
-                        .HasForeignKey("OrganisationId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("InvitedByUser");
-
-                    b.Navigation("Organisation");
                 });
 
             modelBuilder.Entity("AccountingApp.Models.OrganisationMember", b =>

@@ -79,7 +79,7 @@ public class OrganisationsControllerTests : IClassFixture<AccountingWebApplicati
     }
 
     [Fact]
-    public async Task UpdateOrganisation_NonExistent_Returns404()
+    public async Task UpdateOrganisation_NotMember_Returns403()
     {
         var client = _factory.CreateClient();
         var token = await AuthHelper.RegisterAndGetTokenAsync(client);
@@ -93,6 +93,6 @@ public class OrganisationsControllerTests : IClassFixture<AccountingWebApplicati
 
         var response = await client.PutAsJsonAsync($"/api/organisations/{Guid.NewGuid()}", updateData);
 
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 }

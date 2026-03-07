@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using AccountingApp.Services;
+using AccountingApp.Filters;
 
 namespace AccountingApp.Controllers;
 
@@ -17,6 +18,7 @@ public class ReportsController : ControllerBase
     }
 
     [HttpGet("trial-balance")]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetTrialBalance(Guid organisationId, [FromQuery] DateTime? asOfDate)
     {
         var date = asOfDate ?? DateTime.UtcNow;
@@ -25,6 +27,7 @@ public class ReportsController : ControllerBase
     }
 
     [HttpGet("taccounts")]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetTAccounts(Guid organisationId, [FromQuery] DateTime? asOfDate)
     {
         var date = asOfDate ?? DateTime.UtcNow;
@@ -33,6 +36,7 @@ public class ReportsController : ControllerBase
     }
 
     [HttpGet("taccounts/{accountId}")]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetTAccount(Guid organisationId, Guid accountId, [FromQuery] DateTime? asOfDate)
     {
         var date = asOfDate ?? DateTime.UtcNow;
@@ -41,6 +45,7 @@ public class ReportsController : ControllerBase
     }
 
     [HttpGet("general-ledger")]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetGeneralLedger(Guid organisationId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate)
     {
         var result = await _service.GetGeneralLedgerAsync(organisationId, fromDate, toDate);
@@ -48,6 +53,7 @@ public class ReportsController : ControllerBase
     }
 
     [HttpGet("profit-and-loss")]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetProfitAndLoss(Guid organisationId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate)
     {
         var result = await _service.GetProfitAndLossAsync(organisationId, fromDate, toDate);
@@ -55,6 +61,7 @@ public class ReportsController : ControllerBase
     }
 
     [HttpGet("balance-sheet")]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetBalanceSheet(Guid organisationId, [FromQuery] DateTime? asOfDate)
     {
         var date = asOfDate ?? DateTime.UtcNow;

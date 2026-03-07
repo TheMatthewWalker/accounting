@@ -5,6 +5,214 @@ using Microsoft.EntityFrameworkCore;
 
 namespace AccountingApp.Services;
 
+public class OrganisationService : IOrganisationService
+{
+    private readonly ApplicationDbContext _context;
+    private readonly ILogger<OrganisationService> _logger;
+
+    public OrganisationService(ApplicationDbContext context, ILogger<OrganisationService> logger)
+    {
+        _context = context;
+        _logger = logger;
+    }
+
+    public async Task DeleteOrganisationAsync(Guid organisationId)
+    {
+        var org = await _context.Organisations.FindAsync(organisationId);
+        if (org == null)
+            throw new ResourceNotFoundException("Organisation", organisationId.ToString());
+
+        org.IsActive = false;
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Organisation {OrganisationId} soft-deleted", organisationId);
+    }
+
+    public async Task<IEnumerable<MemberResponse>> GetMembersAsync(Guid organisationId)
+    {
+        var members = await _context.OrganisationMembers
+            .Include(m => m.User)
+            .Where(m => m.OrganisationId == organisationId && m.IsActive)
+            .ToListAsync();
+
+        return members.Select(m => new MemberResponse
+        {
+            MemberId = m.Id,
+            UserId = m.UserId,
+            Email = m.User?.Email ?? string.Empty,
+            FirstName = m.User?.FirstName ?? string.Empty,
+            LastName = m.User?.LastName ?? string.Empty,
+            Role = m.Role,
+            JoinedAt = m.JoinedAt
+        });
+    }
+
+    public async Task<MemberResponse> UpdateMemberRoleAsync(Guid organisationId, Guid memberId, UpdateMemberRoleRequest request)
+    {
+        var member = await _context.OrganisationMembers
+            .Include(m => m.User)
+            .FirstOrDefaultAsync(m => m.Id == memberId && m.OrganisationId == organisationId && m.IsActive);
+
+        if (member == null)
+            throw new ResourceNotFoundException("Member", memberId.ToString());
+
+        // Prevent demoting the last Owner
+        if (member.Role == "Owner" && request.Role != "Owner")
+        {
+            var ownerCount = await _context.OrganisationMembers
+                .CountAsync(m => m.OrganisationId == organisationId && m.Role == "Owner" && m.IsActive);
+            if (ownerCount <= 1)
+                throw new BusinessRuleException("Cannot change the role of the last Owner.", "LAST_OWNER");
+        }
+
+        member.Role = request.Role;
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Member {MemberId} role updated to {Role} in organisation {OrganisationId}", memberId, request.Role, organisationId);
+
+        return new MemberResponse
+        {
+            MemberId = member.Id,
+            UserId = member.UserId,
+            Email = member.User?.Email ?? string.Empty,
+            FirstName = member.User?.FirstName ?? string.Empty,
+            LastName = member.User?.LastName ?? string.Empty,
+            Role = member.Role,
+            JoinedAt = member.JoinedAt
+        };
+    }
+
+    public async Task RemoveMemberAsync(Guid organisationId, Guid memberId, Guid requestingUserId)
+    {
+        var member = await _context.OrganisationMembers
+            .FirstOrDefaultAsync(m => m.Id == memberId && m.OrganisationId == organisationId && m.IsActive);
+
+        if (member == null)
+            throw new ResourceNotFoundException("Member", memberId.ToString());
+
+        if (member.UserId == requestingUserId)
+            throw new BusinessRuleException("You cannot remove yourself from the organisation.", "CANNOT_REMOVE_SELF");
+
+        if (member.Role == "Owner")
+        {
+            var ownerCount = await _context.OrganisationMembers
+                .CountAsync(m => m.OrganisationId == organisationId && m.Role == "Owner" && m.IsActive);
+            if (ownerCount <= 1)
+                throw new BusinessRuleException("Cannot remove the last Owner.", "LAST_OWNER");
+        }
+
+        member.IsActive = false;
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Member {MemberId} removed from organisation {OrganisationId}", memberId, organisationId);
+    }
+
+    public async Task<InvitationResponse> CreateInvitationAsync(Guid organisationId, Guid invitedByUserId, CreateInvitationRequest request)
+    {
+        var alreadyMember = await _context.OrganisationMembers
+            .AnyAsync(m => m.OrganisationId == organisationId && m.User!.Email == request.Email && m.IsActive);
+        if (alreadyMember)
+            throw new DuplicateResourceException($"A user with email '{request.Email}' is already a member of this organisation.");
+
+        var pendingInvite = await _context.OrganisationInvitations
+            .AnyAsync(i => i.OrganisationId == organisationId && i.InvitedEmail == request.Email
+                        && !i.IsAccepted && i.ExpiresAt > DateTime.UtcNow);
+        if (pendingInvite)
+            throw new DuplicateResourceException($"A pending invitation for '{request.Email}' already exists.");
+
+        var invitation = new OrganisationInvitation
+        {
+            Id = Guid.NewGuid(),
+            OrganisationId = organisationId,
+            InvitedEmail = request.Email,
+            Role = request.Role,
+            Token = Guid.NewGuid().ToString("N"), // 32-char alphanumeric token
+            InvitedByUserId = invitedByUserId,
+            CreatedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddDays(7),
+            IsAccepted = false
+        };
+
+        _context.OrganisationInvitations.Add(invitation);
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Invitation created for {Email} to join organisation {OrganisationId} with role {Role}", request.Email, organisationId, request.Role);
+
+        return MapToInvitationResponse(invitation);
+    }
+
+    public async Task<IEnumerable<InvitationResponse>> GetInvitationsAsync(Guid organisationId)
+    {
+        var invitations = await _context.OrganisationInvitations
+            .Where(i => i.OrganisationId == organisationId && !i.IsAccepted && i.ExpiresAt > DateTime.UtcNow)
+            .OrderByDescending(i => i.CreatedAt)
+            .ToListAsync();
+
+        return invitations.Select(MapToInvitationResponse);
+    }
+
+    public async Task CancelInvitationAsync(Guid organisationId, Guid invitationId)
+    {
+        var invitation = await _context.OrganisationInvitations
+            .FirstOrDefaultAsync(i => i.Id == invitationId && i.OrganisationId == organisationId);
+
+        if (invitation == null)
+            throw new ResourceNotFoundException("Invitation", invitationId.ToString());
+
+        _context.OrganisationInvitations.Remove(invitation);
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Invitation {InvitationId} cancelled", invitationId);
+    }
+
+    public async Task<MemberResponse> AcceptInvitationAsync(string token, Guid acceptingUserId)
+    {
+        var invitation = await _context.OrganisationInvitations
+            .FirstOrDefaultAsync(i => i.Token == token && !i.IsAccepted && i.ExpiresAt > DateTime.UtcNow);
+
+        if (invitation == null)
+            throw new ResourceNotFoundException("Invitation token is invalid or has expired.");
+
+        var alreadyMember = await _context.OrganisationMembers
+            .AnyAsync(m => m.UserId == acceptingUserId && m.OrganisationId == invitation.OrganisationId && m.IsActive);
+        if (alreadyMember)
+            throw new BusinessRuleException("You are already a member of this organisation.", "ALREADY_MEMBER");
+
+        var membership = new OrganisationMember
+        {
+            Id = Guid.NewGuid(),
+            OrganisationId = invitation.OrganisationId,
+            UserId = acceptingUserId,
+            Role = invitation.Role,
+            JoinedAt = DateTime.UtcNow,
+            IsActive = true
+        };
+
+        _context.OrganisationMembers.Add(membership);
+        invitation.IsAccepted = true;
+        await _context.SaveChangesAsync();
+
+        var user = await _context.Users.FindAsync(acceptingUserId);
+        _logger.LogInformation("User {UserId} accepted invitation to organisation {OrganisationId} with role {Role}", acceptingUserId, invitation.OrganisationId, invitation.Role);
+
+        return new MemberResponse
+        {
+            MemberId = membership.Id,
+            UserId = acceptingUserId,
+            Email = user?.Email ?? string.Empty,
+            FirstName = user?.FirstName ?? string.Empty,
+            LastName = user?.LastName ?? string.Empty,
+            Role = membership.Role,
+            JoinedAt = membership.JoinedAt
+        };
+    }
+
+    private static InvitationResponse MapToInvitationResponse(OrganisationInvitation i) => new()
+    {
+        Id = i.Id,
+        InvitedEmail = i.InvitedEmail,
+        Role = i.Role,
+        Token = i.Token,
+        ExpiresAt = i.ExpiresAt,
+        IsAccepted = i.IsAccepted
+    };
+}
+
 public class GLAccountService : IGLAccountService
 {
     private readonly ApplicationDbContext _context;
@@ -352,6 +560,236 @@ public class DaybookService : IDaybookService
         _logger.LogInformation("Daybook entry {EntryId} deleted", entryId);
     }
 
+    public async Task<DaybookResponse> CreateSalesDaybookAsync(Guid organisationId, CreateSalesDaybookRequest request)
+    {
+        _logger.LogDebug("Creating Sales daybook entry for organisation {OrganisationId}", organisationId);
+
+        if (request.EntryDate.Date > DateTime.UtcNow.Date)
+            throw new ValidationException("Entry date cannot be in the future.");
+
+        // Resolve the Accounts Receivable account
+        Guid receivableAccountId;
+        Guid? customerId = null;
+
+        if (request.CustomerId.HasValue)
+        {
+            var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
+            if (customer == null)
+                throw new ResourceNotFoundException("Customer", request.CustomerId.Value.ToString());
+            customerId = customer.Id;
+            if (customer.ControlAccountId.HasValue)
+                receivableAccountId = customer.ControlAccountId.Value;
+            else if (request.ReceivableAccountId.HasValue)
+                receivableAccountId = request.ReceivableAccountId.Value;
+            else
+                throw new ValidationException("The specified customer has no control account linked. Please provide a ReceivableAccountId.");
+        }
+        else if (request.ReceivableAccountId.HasValue)
+        {
+            receivableAccountId = request.ReceivableAccountId.Value;
+        }
+        else
+        {
+            throw new ValidationException("Either CustomerId (with a linked AR account) or ReceivableAccountId must be specified.");
+        }
+
+        await ValidateGLAccount(receivableAccountId, "Receivable");
+
+        bool hasVat = request.Lines.Any(l => l.VatAmount > 0);
+        if (hasVat && !request.VatAccountId.HasValue)
+            throw new ValidationException("VatAccountId is required when any line has a VAT amount.");
+        if (request.VatAccountId.HasValue)
+            await ValidateGLAccount(request.VatAccountId.Value, "VAT");
+
+        foreach (var line in request.Lines)
+            await ValidateGLAccount(line.RevenueAccountId, "Revenue");
+
+        decimal totalAmount = request.Lines.Sum(l => l.NetAmount + l.VatAmount);
+
+        var entry = BuildDaybookEntry(organisationId, "Sales", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        _context.DaybookEntries.Add(entry);
+
+        // DR Receivable for the full invoice total
+        AddJournalLine(entry.Id, receivableAccountId, debit: totalAmount, narration: request.Description);
+
+        // CR Revenue (and VAT) per line
+        foreach (var line in request.Lines)
+        {
+            AddJournalLine(entry.Id, line.RevenueAccountId, credit: line.NetAmount, narration: line.Description);
+            if (line.VatAmount > 0)
+                AddJournalLine(entry.Id, request.VatAccountId!.Value, credit: line.VatAmount, narration: $"VAT on {line.Description}");
+        }
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Sales daybook entry {EntryId} created for organisation {OrganisationId}", entry.Id, organisationId);
+        return await MapToDaybookResponse(entry);
+    }
+
+    public async Task<DaybookResponse> CreatePurchaseDaybookAsync(Guid organisationId, CreatePurchaseDaybookRequest request)
+    {
+        _logger.LogDebug("Creating Purchase daybook entry for organisation {OrganisationId}", organisationId);
+
+        if (request.EntryDate.Date > DateTime.UtcNow.Date)
+            throw new ValidationException("Entry date cannot be in the future.");
+
+        // Resolve the Accounts Payable account
+        Guid payableAccountId;
+        Guid? supplierId = null;
+
+        if (request.SupplierId.HasValue)
+        {
+            var supplier = await _context.Suppliers.FindAsync(request.SupplierId.Value);
+            if (supplier == null)
+                throw new ResourceNotFoundException("Supplier", request.SupplierId.Value.ToString());
+            supplierId = supplier.Id;
+            if (supplier.ControlAccountId.HasValue)
+                payableAccountId = supplier.ControlAccountId.Value;
+            else if (request.PayableAccountId.HasValue)
+                payableAccountId = request.PayableAccountId.Value;
+            else
+                throw new ValidationException("The specified supplier has no control account linked. Please provide a PayableAccountId.");
+        }
+        else if (request.PayableAccountId.HasValue)
+        {
+            payableAccountId = request.PayableAccountId.Value;
+        }
+        else
+        {
+            throw new ValidationException("Either SupplierId (with a linked AP account) or PayableAccountId must be specified.");
+        }
+
+        await ValidateGLAccount(payableAccountId, "Payable");
+
+        bool hasVat = request.Lines.Any(l => l.VatAmount > 0);
+        if (hasVat && !request.VatAccountId.HasValue)
+            throw new ValidationException("VatAccountId is required when any line has a VAT amount.");
+        if (request.VatAccountId.HasValue)
+            await ValidateGLAccount(request.VatAccountId.Value, "VAT");
+
+        foreach (var line in request.Lines)
+            await ValidateGLAccount(line.ExpenseAccountId, "Expense");
+
+        decimal totalAmount = request.Lines.Sum(l => l.NetAmount + l.VatAmount);
+
+        var entry = BuildDaybookEntry(organisationId, "Purchase", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        _context.DaybookEntries.Add(entry);
+
+        // DR Expense (and VAT) per line
+        foreach (var line in request.Lines)
+        {
+            AddJournalLine(entry.Id, line.ExpenseAccountId, debit: line.NetAmount, narration: line.Description);
+            if (line.VatAmount > 0)
+                AddJournalLine(entry.Id, request.VatAccountId!.Value, debit: line.VatAmount, narration: $"VAT on {line.Description}");
+        }
+
+        // CR Payable for the full invoice total
+        AddJournalLine(entry.Id, payableAccountId, credit: totalAmount, narration: request.Description);
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Purchase daybook entry {EntryId} created for organisation {OrganisationId}", entry.Id, organisationId);
+        return await MapToDaybookResponse(entry);
+    }
+
+    public async Task<DaybookResponse> CreateReceiptDaybookAsync(Guid organisationId, CreateReceiptDaybookRequest request)
+    {
+        _logger.LogDebug("Creating Receipt daybook entry for organisation {OrganisationId}", organisationId);
+
+        if (request.EntryDate.Date > DateTime.UtcNow.Date)
+            throw new ValidationException("Entry date cannot be in the future.");
+
+        await ValidateGLAccount(request.BankAccountId, "Bank");
+        await ValidateGLAccount(request.CreditAccountId, "Credit");
+
+        Guid? customerId = null;
+        if (request.CustomerId.HasValue)
+        {
+            var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
+            if (customer == null)
+                throw new ResourceNotFoundException("Customer", request.CustomerId.Value.ToString());
+            customerId = customer.Id;
+        }
+
+        var entry = BuildDaybookEntry(organisationId, "Receipt", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        _context.DaybookEntries.Add(entry);
+
+        // DR Bank, CR Credit account
+        AddJournalLine(entry.Id, request.BankAccountId, debit: request.Amount, narration: request.Description);
+        AddJournalLine(entry.Id, request.CreditAccountId, credit: request.Amount, narration: request.Description);
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Receipt daybook entry {EntryId} created for organisation {OrganisationId}", entry.Id, organisationId);
+        return await MapToDaybookResponse(entry);
+    }
+
+    public async Task<DaybookResponse> CreatePaymentDaybookAsync(Guid organisationId, CreatePaymentDaybookRequest request)
+    {
+        _logger.LogDebug("Creating Payment daybook entry for organisation {OrganisationId}", organisationId);
+
+        if (request.EntryDate.Date > DateTime.UtcNow.Date)
+            throw new ValidationException("Entry date cannot be in the future.");
+
+        await ValidateGLAccount(request.DebitAccountId, "Debit");
+        await ValidateGLAccount(request.BankAccountId, "Bank");
+
+        Guid? supplierId = null;
+        if (request.SupplierId.HasValue)
+        {
+            var supplier = await _context.Suppliers.FindAsync(request.SupplierId.Value);
+            if (supplier == null)
+                throw new ResourceNotFoundException("Supplier", request.SupplierId.Value.ToString());
+            supplierId = supplier.Id;
+        }
+
+        var entry = BuildDaybookEntry(organisationId, "Payment", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        _context.DaybookEntries.Add(entry);
+
+        // DR Debit account (AP/Expense), CR Bank
+        AddJournalLine(entry.Id, request.DebitAccountId, debit: request.Amount, narration: request.Description);
+        AddJournalLine(entry.Id, request.BankAccountId, credit: request.Amount, narration: request.Description);
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Payment daybook entry {EntryId} created for organisation {OrganisationId}", entry.Id, organisationId);
+        return await MapToDaybookResponse(entry);
+    }
+
+    private async Task ValidateGLAccount(Guid accountId, string role)
+    {
+        var exists = await _context.GLAccounts.AnyAsync(a => a.Id == accountId && a.IsActive);
+        if (!exists)
+            throw new ResourceNotFoundException($"GL Account ({role})", accountId.ToString());
+    }
+
+    private DaybookEntry BuildDaybookEntry(Guid organisationId, string type, string? reference, DateTime entryDate, string? description, Guid? customerId, Guid? supplierId)
+    {
+        return new DaybookEntry
+        {
+            Id = Guid.NewGuid(),
+            OrganisationId = organisationId,
+            Type = type,
+            ReferenceNumber = reference,
+            EntryDate = entryDate,
+            Description = description,
+            CustomerId = customerId,
+            SupplierId = supplierId,
+            IsPosted = false,
+            CreatedAt = DateTime.UtcNow,
+            CreatedBy = Guid.NewGuid()
+        };
+    }
+
+    private void AddJournalLine(Guid daybookEntryId, Guid glAccountId, decimal debit = 0, decimal credit = 0, string? narration = null)
+    {
+        _context.JournalEntries.Add(new JournalEntry
+        {
+            Id = Guid.NewGuid(),
+            DaybookEntryId = daybookEntryId,
+            GLAccountId = glAccountId,
+            DebitAmount = debit,
+            CreditAmount = credit,
+            NarrationLine = narration
+        });
+    }
+
     private async Task<DaybookResponse> MapToDaybookResponse(DaybookEntry daybookEntry)
     {
         var journalEntries = await _context.JournalEntries
@@ -373,6 +811,14 @@ public class DaybookService : IDaybookService
             });
         }
 
+        string? customerName = null;
+        if (daybookEntry.CustomerId.HasValue)
+            customerName = (await _context.Customers.FindAsync(daybookEntry.CustomerId.Value))?.Name;
+
+        string? supplierName = null;
+        if (daybookEntry.SupplierId.HasValue)
+            supplierName = (await _context.Suppliers.FindAsync(daybookEntry.SupplierId.Value))?.Name;
+
         return new DaybookResponse
         {
             Id = daybookEntry.Id,
@@ -381,6 +827,10 @@ public class DaybookService : IDaybookService
             EntryDate = daybookEntry.EntryDate,
             Description = daybookEntry.Description,
             IsPosted = daybookEntry.IsPosted,
+            CustomerId = daybookEntry.CustomerId,
+            CustomerName = customerName,
+            SupplierId = daybookEntry.SupplierId,
+            SupplierName = supplierName,
             Lines = lines
         };
     }

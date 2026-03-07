@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using AccountingApp.Services;
+using AccountingApp.Filters;
 
 namespace AccountingApp.Controllers;
 
@@ -17,6 +18,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpPost]
+    [RequireOrganisationRole("Manager")]
     public async Task<IActionResult> CreateCustomer(Guid organisationId, [FromBody] CreateCustomerRequest request)
     {
         var result = await _service.CreateCustomerAsync(organisationId, request);
@@ -24,6 +26,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpGet("{customerId}")]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetCustomer(Guid organisationId, Guid customerId)
     {
         var customer = await _service.GetCustomerAsync(customerId);
@@ -31,6 +34,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpGet]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetCustomers(Guid organisationId)
     {
         var customers = await _service.GetCustomersByOrganisationAsync(organisationId);
@@ -38,6 +42,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpPut("{customerId}")]
+    [RequireOrganisationRole("Manager")]
     public async Task<IActionResult> UpdateCustomer(Guid organisationId, Guid customerId, [FromBody] UpdateCustomerRequest request)
     {
         var result = await _service.UpdateCustomerAsync(customerId, request);
@@ -45,6 +50,7 @@ public class CustomersController : ControllerBase
     }
 
     [HttpDelete("{customerId}")]
+    [RequireOrganisationRole("Manager")]
     public async Task<IActionResult> DeleteCustomer(Guid organisationId, Guid customerId)
     {
         await _service.DeleteCustomerAsync(customerId);
@@ -65,6 +71,7 @@ public class SuppliersController : ControllerBase
     }
 
     [HttpPost]
+    [RequireOrganisationRole("Manager")]
     public async Task<IActionResult> CreateSupplier(Guid organisationId, [FromBody] CreateSupplierRequest request)
     {
         var result = await _service.CreateSupplierAsync(organisationId, request);
@@ -72,6 +79,7 @@ public class SuppliersController : ControllerBase
     }
 
     [HttpGet("{supplierId}")]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetSupplier(Guid organisationId, Guid supplierId)
     {
         var supplier = await _service.GetSupplierAsync(supplierId);
@@ -79,6 +87,7 @@ public class SuppliersController : ControllerBase
     }
 
     [HttpGet]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetSuppliers(Guid organisationId)
     {
         var suppliers = await _service.GetSuppliersByOrganisationAsync(organisationId);
@@ -86,6 +95,7 @@ public class SuppliersController : ControllerBase
     }
 
     [HttpPut("{supplierId}")]
+    [RequireOrganisationRole("Manager")]
     public async Task<IActionResult> UpdateSupplier(Guid organisationId, Guid supplierId, [FromBody] UpdateSupplierRequest request)
     {
         var result = await _service.UpdateSupplierAsync(supplierId, request);
@@ -93,6 +103,7 @@ public class SuppliersController : ControllerBase
     }
 
     [HttpDelete("{supplierId}")]
+    [RequireOrganisationRole("Manager")]
     public async Task<IActionResult> DeleteSupplier(Guid organisationId, Guid supplierId)
     {
         await _service.DeleteSupplierAsync(supplierId);

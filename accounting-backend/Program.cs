@@ -63,6 +63,7 @@ builder.Services.AddAuthentication(options =>
 
 // Register Services
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IOrganisationService, OrganisationService>();
 builder.Services.AddScoped<IGLAccountService, GLAccountService>();
 builder.Services.AddScoped<IDaybookService, DaybookService>();
 builder.Services.AddScoped<IReportService, ReportService>();

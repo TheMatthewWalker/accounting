@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using AccountingApp.Services;
+using AccountingApp.Filters;
 
 namespace AccountingApp.Controllers;
 
@@ -17,6 +18,7 @@ public class GLAccountsController : ControllerBase
     }
 
     [HttpPost]
+    [RequireOrganisationRole("Owner")]
     public async Task<IActionResult> CreateAccount(Guid organisationId, [FromBody] CreateGLAccountRequest request)
     {
         var result = await _service.CreateAccountAsync(organisationId, request);
@@ -24,6 +26,7 @@ public class GLAccountsController : ControllerBase
     }
 
     [HttpGet("{accountId}")]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetAccount(Guid organisationId, Guid accountId)
     {
         var account = await _service.GetAccountAsync(accountId);
@@ -31,6 +34,7 @@ public class GLAccountsController : ControllerBase
     }
 
     [HttpGet]
+    [RequireOrganisationRole("Viewer")]
     public async Task<IActionResult> GetAccounts(Guid organisationId)
     {
         var accounts = await _service.GetAccountsByOrganisationAsync(organisationId);
@@ -38,6 +42,7 @@ public class GLAccountsController : ControllerBase
     }
 
     [HttpPut("{accountId}")]
+    [RequireOrganisationRole("Owner")]
     public async Task<IActionResult> UpdateAccount(Guid organisationId, Guid accountId, [FromBody] UpdateGLAccountRequest request)
     {
         var result = await _service.UpdateAccountAsync(accountId, request);
@@ -45,6 +50,7 @@ public class GLAccountsController : ControllerBase
     }
 
     [HttpDelete("{accountId}")]
+    [RequireOrganisationRole("Owner")]
     public async Task<IActionResult> DeleteAccount(Guid organisationId, Guid accountId)
     {
         await _service.DeleteAccountAsync(accountId);
