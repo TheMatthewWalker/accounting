@@ -106,11 +106,9 @@
     </div>
 
     <script type="module">
-        import { ApiService, UIUtils } from '../js/api.js';
+        import { ApiService, UIUtils, AuthGuard } from '../js/api.js';
 
-        if (!ApiService.isLoggedIn()) {
-            window.location.href = 'login.html';
-        }
+        AuthGuard.init();
 
         const newCustomerBtn = document.getElementById('newCustomerBtn');
         const cancelBtn = document.getElementById('cancelBtn');
