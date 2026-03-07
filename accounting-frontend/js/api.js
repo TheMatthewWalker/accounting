@@ -146,6 +146,10 @@ class ApiService {
         return this.request(`${API_BASE_URL}/organisations/${orgId}/invitations`, 'POST', { invitedEmail: email, role });
     }
 
+    static async updateOrganisationVatSettings(id, defaultVatAccountId, vatReducedRate, vatFullRate) {
+        return this.request(`${API_BASE_URL}/organisations/${id}`, 'PUT', { defaultVatAccountId, vatReducedRate, vatFullRate });
+    }
+
     static async cancelInvitation(orgId, invitationId) {
         return this.request(`${API_BASE_URL}/organisations/${orgId}/invitations/${invitationId}`, 'DELETE');
     }
@@ -199,8 +203,16 @@ class ApiService {
         return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/sales`, 'POST', entry);
     }
 
+    static async createSalesReturnDaybookEntry(organisationId, entry) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/sales-returns`, 'POST', entry);
+    }
+
     static async createPurchaseDaybookEntry(organisationId, entry) {
         return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/purchases`, 'POST', entry);
+    }
+
+    static async createPurchaseReturnDaybookEntry(organisationId, entry) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/purchase-returns`, 'POST', entry);
     }
 
     static async createReceiptDaybookEntry(organisationId, entry) {
@@ -378,6 +390,19 @@ class ApiService {
 
 // UI Utility Functions
 class UIUtils {
+    static getErrorMessage(data) {
+        if (!data) return 'An unexpected error occurred. Please check your connection.';
+        // Custom exception middleware format: { error: { code, message } }
+        if (data.error?.message) return data.error.message;
+        // ASP.NET ProblemDetails format: { title, errors: { field: [msg] } }
+        if (data.errors) {
+            const msgs = Object.values(data.errors).flat();
+            return msgs.length > 0 ? msgs.join(' | ') : (data.title || 'Validation error');
+        }
+        if (data.title) return data.title;
+        return 'An unexpected error occurred.';
+    }
+
     static showAlert(message, type = 'info') {
         const alertDiv = document.createElement('div');
         alertDiv.className = `alert alert-${type}`;

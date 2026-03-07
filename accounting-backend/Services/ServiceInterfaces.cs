@@ -38,7 +38,7 @@ public class CreateInvitationRequest
 {
     [Required]
     [EmailAddress]
-    public string Email { get; set; } = string.Empty;
+    public string InvitedEmail { get; set; } = string.Empty;
     [Required]
     [RegularExpression("^(Viewer|Bookkeeper|Manager|Owner)$")]
     public string Role { get; set; } = string.Empty;
@@ -121,7 +121,9 @@ public interface IDaybookService
 {
     Task<DaybookResponse> CreateDaybookEntryAsync(Guid organisationId, CreateDaybookRequest request);
     Task<DaybookResponse> CreateSalesDaybookAsync(Guid organisationId, CreateSalesDaybookRequest request);
+    Task<DaybookResponse> CreateSalesReturnDaybookAsync(Guid organisationId, CreateSalesDaybookRequest request);
     Task<DaybookResponse> CreatePurchaseDaybookAsync(Guid organisationId, CreatePurchaseDaybookRequest request);
+    Task<DaybookResponse> CreatePurchaseReturnDaybookAsync(Guid organisationId, CreatePurchaseDaybookRequest request);
     Task<DaybookResponse> CreateReceiptDaybookAsync(Guid organisationId, CreateReceiptDaybookRequest request);
     Task<DaybookResponse> CreatePaymentDaybookAsync(Guid organisationId, CreatePaymentDaybookRequest request);
     Task<DaybookResponse> GetDaybookEntryAsync(Guid entryId);

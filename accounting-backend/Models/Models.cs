@@ -50,7 +50,13 @@ public class Organisation
     public DateTime? SubscriptionExpiresAt { get; set; }
     public bool IsActive { get; set; } = true;
 
+    // VAT settings
+    public Guid? DefaultVatAccountId { get; set; }
+    public decimal VatReducedRate { get; set; } = 5m;
+    public decimal VatFullRate { get; set; } = 20m;
+
     // Navigation properties
+    public GLAccount? DefaultVatAccount { get; set; }
     public ICollection<OrganisationMember> Members { get; set; } = new List<OrganisationMember>();
     public ICollection<GLAccount> GLAccounts { get; set; } = new List<GLAccount>();
     public ICollection<DaybookEntry> DaybookEntries { get; set; } = new List<DaybookEntry>();
@@ -114,8 +120,8 @@ public class DaybookEntry
     public Guid Id { get; set; }
     public Guid OrganisationId { get; set; }
     [Required]
-    [RegularExpression("^(Sales|Purchase|Journal|Bank|Receipt|Payment)$")]
-    public string Type { get; set; } = string.Empty; // Sales, Purchase, Journal, Receipt, Payment
+    [RegularExpression("^(Sales|SalesReturn|Purchase|PurchaseReturn|Journal|Bank|Receipt|Payment)$")]
+    public string Type { get; set; } = string.Empty; // Sales, SalesReturn, Purchase, PurchaseReturn, Journal, Receipt, Payment
     public string? ReferenceNumber { get; set; }
     [Required]
     public DateTime EntryDate { get; set; }

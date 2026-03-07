@@ -117,6 +117,9 @@ public class OrganisationsController : ControllerBase
         org.Description = request.Description;
         org.RegistrationNumber = request.RegistrationNumber;
         org.TaxNumber = request.TaxNumber;
+        org.DefaultVatAccountId = request.DefaultVatAccountId;
+        org.VatReducedRate = request.VatReducedRate;
+        org.VatFullRate = request.VatFullRate;
 
         await _context.SaveChangesAsync();
         return Ok(org);
@@ -222,6 +225,11 @@ public class UpdateOrganisationRequest
     public string? Description { get; set; }
     public string? RegistrationNumber { get; set; }
     public string? TaxNumber { get; set; }
+    public Guid? DefaultVatAccountId { get; set; }
+    [Range(0, 100)]
+    public decimal VatReducedRate { get; set; } = 5m;
+    [Range(0, 100)]
+    public decimal VatFullRate { get; set; } = 20m;
 }
 
 public class AcceptInvitationRequest

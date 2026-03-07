@@ -107,21 +107,21 @@ public class OrganisationService : IOrganisationService
     public async Task<InvitationResponse> CreateInvitationAsync(Guid organisationId, Guid invitedByUserId, CreateInvitationRequest request)
     {
         var alreadyMember = await _context.OrganisationMembers
-            .AnyAsync(m => m.OrganisationId == organisationId && m.User!.Email == request.Email && m.IsActive);
+            .AnyAsync(m => m.OrganisationId == organisationId && m.User!.Email == request.InvitedEmail && m.IsActive);
         if (alreadyMember)
-            throw new DuplicateResourceException($"A user with email '{request.Email}' is already a member of this organisation.");
+            throw new DuplicateResourceException($"A user with email '{request.InvitedEmail}' is already a member of this organisation.");
 
         var pendingInvite = await _context.OrganisationInvitations
-            .AnyAsync(i => i.OrganisationId == organisationId && i.InvitedEmail == request.Email
+            .AnyAsync(i => i.OrganisationId == organisationId && i.InvitedEmail == request.InvitedEmail
                         && !i.IsAccepted && i.ExpiresAt > DateTime.UtcNow);
         if (pendingInvite)
-            throw new DuplicateResourceException($"A pending invitation for '{request.Email}' already exists.");
+            throw new DuplicateResourceException($"A pending invitation for '{request.InvitedEmail}' already exists.");
 
         var invitation = new OrganisationInvitation
         {
             Id = Guid.NewGuid(),
             OrganisationId = organisationId,
-            InvitedEmail = request.Email,
+            InvitedEmail = request.InvitedEmail,
             Role = request.Role,
             Token = Guid.NewGuid().ToString("N"), // 32-char alphanumeric token
             InvitedByUserId = invitedByUserId,
@@ -132,7 +132,7 @@ public class OrganisationService : IOrganisationService
 
         _context.OrganisationInvitations.Add(invitation);
         await _context.SaveChangesAsync();
-        _logger.LogInformation("Invitation created for {Email} to join organisation {OrganisationId} with role {Role}", request.Email, organisationId, request.Role);
+        _logger.LogInformation("Invitation created for {Email} to join organisation {OrganisationId} with role {Role}", request.InvitedEmail, organisationId, request.Role);
 
         return MapToInvitationResponse(invitation);
     }
@@ -635,6 +635,69 @@ public class DaybookService : IDaybookService
         return await MapToDaybookResponse(entry);
     }
 
+    public async Task<DaybookResponse> CreateSalesReturnDaybookAsync(Guid organisationId, CreateSalesDaybookRequest request)
+    {
+        _logger.LogDebug("Creating Sales Return (credit note) daybook entry for organisation {OrganisationId}", organisationId);
+
+        if (request.EntryDate.Date > DateTime.UtcNow.Date)
+            throw new ValidationException("Entry date cannot be in the future.");
+
+        Guid receivableAccountId;
+        Guid? customerId = null;
+
+        if (request.CustomerId.HasValue)
+        {
+            var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
+            if (customer == null) throw new ResourceNotFoundException("Customer", request.CustomerId.Value.ToString());
+            customerId = customer.Id;
+            if (customer.ControlAccountId.HasValue)
+                receivableAccountId = customer.ControlAccountId.Value;
+            else if (request.ReceivableAccountId.HasValue)
+                receivableAccountId = request.ReceivableAccountId.Value;
+            else
+                throw new ValidationException("The specified customer has no control account linked. Please provide a ReceivableAccountId.");
+        }
+        else if (request.ReceivableAccountId.HasValue)
+        {
+            receivableAccountId = request.ReceivableAccountId.Value;
+        }
+        else
+        {
+            throw new ValidationException("Either CustomerId (with a linked AR account) or ReceivableAccountId must be specified.");
+        }
+
+        await ValidateGLAccount(receivableAccountId, "Receivable");
+
+        bool hasVat = request.Lines.Any(l => l.VatAmount > 0);
+        if (hasVat && !request.VatAccountId.HasValue)
+            throw new ValidationException("VatAccountId is required when any line has a VAT amount.");
+        if (request.VatAccountId.HasValue)
+            await ValidateGLAccount(request.VatAccountId.Value, "VAT");
+
+        foreach (var line in request.Lines)
+            await ValidateGLAccount(line.RevenueAccountId, "Revenue");
+
+        decimal totalAmount = request.Lines.Sum(l => l.NetAmount + l.VatAmount);
+
+        var entry = BuildDaybookEntry(organisationId, "SalesReturn", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        _context.DaybookEntries.Add(entry);
+
+        // CR Receivable (reduce what customer owes)
+        AddJournalLine(entry.Id, receivableAccountId, credit: totalAmount, narration: request.Description);
+
+        // DR Revenue (and VAT) per line — reversed
+        foreach (var line in request.Lines)
+        {
+            AddJournalLine(entry.Id, line.RevenueAccountId, debit: line.NetAmount, narration: line.Description);
+            if (line.VatAmount > 0)
+                AddJournalLine(entry.Id, request.VatAccountId!.Value, debit: line.VatAmount, narration: $"VAT on {line.Description}");
+        }
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Sales Return daybook entry {EntryId} created for organisation {OrganisationId}", entry.Id, organisationId);
+        return await MapToDaybookResponse(entry);
+    }
+
     public async Task<DaybookResponse> CreatePurchaseDaybookAsync(Guid organisationId, CreatePurchaseDaybookRequest request)
     {
         _logger.LogDebug("Creating Purchase daybook entry for organisation {OrganisationId}", organisationId);
@@ -697,6 +760,69 @@ public class DaybookService : IDaybookService
 
         await _context.SaveChangesAsync();
         _logger.LogInformation("Purchase daybook entry {EntryId} created for organisation {OrganisationId}", entry.Id, organisationId);
+        return await MapToDaybookResponse(entry);
+    }
+
+    public async Task<DaybookResponse> CreatePurchaseReturnDaybookAsync(Guid organisationId, CreatePurchaseDaybookRequest request)
+    {
+        _logger.LogDebug("Creating Purchase Return daybook entry for organisation {OrganisationId}", organisationId);
+
+        if (request.EntryDate.Date > DateTime.UtcNow.Date)
+            throw new ValidationException("Entry date cannot be in the future.");
+
+        Guid payableAccountId;
+        Guid? supplierId = null;
+
+        if (request.SupplierId.HasValue)
+        {
+            var supplier = await _context.Suppliers.FindAsync(request.SupplierId.Value);
+            if (supplier == null) throw new ResourceNotFoundException("Supplier", request.SupplierId.Value.ToString());
+            supplierId = supplier.Id;
+            if (supplier.ControlAccountId.HasValue)
+                payableAccountId = supplier.ControlAccountId.Value;
+            else if (request.PayableAccountId.HasValue)
+                payableAccountId = request.PayableAccountId.Value;
+            else
+                throw new ValidationException("The specified supplier has no control account linked. Please provide a PayableAccountId.");
+        }
+        else if (request.PayableAccountId.HasValue)
+        {
+            payableAccountId = request.PayableAccountId.Value;
+        }
+        else
+        {
+            throw new ValidationException("Either SupplierId (with a linked AP account) or PayableAccountId must be specified.");
+        }
+
+        await ValidateGLAccount(payableAccountId, "Payable");
+
+        bool hasVat = request.Lines.Any(l => l.VatAmount > 0);
+        if (hasVat && !request.VatAccountId.HasValue)
+            throw new ValidationException("VatAccountId is required when any line has a VAT amount.");
+        if (request.VatAccountId.HasValue)
+            await ValidateGLAccount(request.VatAccountId.Value, "VAT");
+
+        foreach (var line in request.Lines)
+            await ValidateGLAccount(line.ExpenseAccountId, "Expense");
+
+        decimal totalAmount = request.Lines.Sum(l => l.NetAmount + l.VatAmount);
+
+        var entry = BuildDaybookEntry(organisationId, "PurchaseReturn", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        _context.DaybookEntries.Add(entry);
+
+        // DR Payable (reduce what we owe supplier)
+        AddJournalLine(entry.Id, payableAccountId, debit: totalAmount, narration: request.Description);
+
+        // CR Expense (and VAT) per line — reversed
+        foreach (var line in request.Lines)
+        {
+            AddJournalLine(entry.Id, line.ExpenseAccountId, credit: line.NetAmount, narration: line.Description);
+            if (line.VatAmount > 0)
+                AddJournalLine(entry.Id, request.VatAccountId!.Value, credit: line.VatAmount, narration: $"VAT on {line.Description}");
+        }
+
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Purchase Return daybook entry {EntryId} created for organisation {OrganisationId}", entry.Id, organisationId);
         return await MapToDaybookResponse(entry);
     }
 

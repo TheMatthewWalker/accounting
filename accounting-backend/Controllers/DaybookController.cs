@@ -44,6 +44,24 @@ public class DaybookController : ControllerBase
         return CreatedAtAction(nameof(GetEntry), new { organisationId, entryId = result.Id }, result);
     }
 
+    // Sales return / credit note: CR Receivable / DR Revenue / DR VAT
+    [HttpPost("sales-returns")]
+    [RequireOrganisationRole("Bookkeeper")]
+    public async Task<IActionResult> CreateSalesReturnEntry(Guid organisationId, [FromBody] CreateSalesDaybookRequest request)
+    {
+        var result = await _service.CreateSalesReturnDaybookAsync(organisationId, request);
+        return CreatedAtAction(nameof(GetEntry), new { organisationId, entryId = result.Id }, result);
+    }
+
+    // Purchase return: DR Payable / CR Expense / CR VAT
+    [HttpPost("purchase-returns")]
+    [RequireOrganisationRole("Bookkeeper")]
+    public async Task<IActionResult> CreatePurchaseReturnEntry(Guid organisationId, [FromBody] CreatePurchaseDaybookRequest request)
+    {
+        var result = await _service.CreatePurchaseReturnDaybookAsync(organisationId, request);
+        return CreatedAtAction(nameof(GetEntry), new { organisationId, entryId = result.Id }, result);
+    }
+
     // Cash/bank receipt: DR Bank / CR Account
     [HttpPost("receipts")]
     [RequireOrganisationRole("Bookkeeper")]
