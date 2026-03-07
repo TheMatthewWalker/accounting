@@ -124,11 +124,9 @@
     </div>
 
     <script type="module">
-        import { ApiService, UIUtils } from '../js/api.js';
+        import { ApiService, UIUtils, AuthGuard } from '../js/api.js';
 
-        if (!ApiService.isLoggedIn()) {
-            window.location.href = 'login.html';
-        }
+        AuthGuard.init();
 
         // UI Controls
         const newAccountBtn = document.getElementById('newAccountBtn');

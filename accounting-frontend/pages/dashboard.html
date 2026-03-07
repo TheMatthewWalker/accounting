@@ -77,12 +77,9 @@
     </div>
 
     <script type="module">
-        import { ApiService, UIUtils } from '../js/api.js';
+        import { ApiService, UIUtils, AuthGuard } from '../js/api.js';
 
-        // Check authentication
-        if (!ApiService.isLoggedIn()) {
-            window.location.href = 'login.html';
-        }
+        AuthGuard.init();
 
         // Set user name
         const user = ApiService.getCurrentUser();

@@ -378,4 +378,71 @@ class UIUtils {
     }
 }
 
-export { ApiService, UIUtils };
+export { ApiService, UIUtils, AuthGuard };
+
+// ── Auth Guard ────────────────────────────────────────────────────────────────
+// Call AuthGuard.init() at the top of every protected page script.
+// Handles:
+//   • Immediate redirect if no token in localStorage
+//   • Background server-side session verification on load
+//   • Periodic re-verification every 5 minutes (catches expired JWTs)
+//   • Re-verification when the tab regains focus (handles sleep / long idle)
+//   • Cross-tab logout detection via the storage event
+
+class AuthGuard {
+    static _intervalId = null;
+    static _POLL_MS = 5 * 60 * 1000; // 5 minutes
+    static _bound = false;
+
+    static init() {
+        // 1. Immediate client-side gate
+        if (!ApiService.isLoggedIn()) {
+            this._redirect();
+            return;
+        }
+
+        // 2. Background server-side verify (non-blocking — bad token caught here)
+        this._verify();
+
+        // 3. Periodic polling
+        clearInterval(this._intervalId);
+        this._intervalId = setInterval(() => this._verify(), this._POLL_MS);
+
+        // 4. Re-verify when the user returns to the tab after idling / sleep
+        if (!this._bound) {
+            this._bound = true;
+
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') this._verify();
+            });
+
+            // 5. Detect logout performed in another browser tab
+            window.addEventListener('storage', (e) => {
+                if (e.key === TOKEN_KEY && !e.newValue) this._redirect();
+            });
+        }
+    }
+
+    static async _verify() {
+        // Client-side token presence check first (fast path)
+        if (!ApiService.isLoggedIn()) {
+            this._redirect();
+            return;
+        }
+        // Any authenticated request triggers the global 401 handler in
+        // ApiService.request() which clears the token and redirects.
+        // We use listOrganisations as a lightweight ping.
+        // Network errors (status 0) are ignored — don't boot users for flaky wifi.
+        const response = await ApiService.listOrganisations();
+        if (!response.ok && response.status !== 0) {
+            // Non-network failure (e.g. 401, 403) → session gone
+            this._redirect();
+        }
+    }
+
+    static _redirect() {
+        clearInterval(this._intervalId);
+        this._intervalId = null;
+        window.location.href = 'login.html';
+    }
+}
