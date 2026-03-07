@@ -194,6 +194,16 @@ public class DaybookService : IDaybookService
             throw new ValidationException("At least 2 journal lines are required.");
         }
 
+        decimal totalDebits = request.Lines.Sum(l => l.DebitAmount);
+        decimal totalCredits = request.Lines.Sum(l => l.CreditAmount);
+
+        if (Math.Abs(totalDebits - totalCredits) > 0.01m)
+        {
+            _logger.LogWarning("Daybook entry creation rejected: debits ({Debits}) do not equal credits ({Credits})", totalDebits, totalCredits);
+            throw new ValidationException(
+                $"Journal entry is not balanced: total debits ({totalDebits:F2}) must equal total credits ({totalCredits:F2}).");
+        }
+
         // Validate all GL accounts exist
         foreach (var line in request.Lines)
         {
