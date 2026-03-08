@@ -274,8 +274,7 @@
                 group: 'Liabilities',
                 accounts: [
                     { code: '2000', name: 'Trade Payables',              type: 'Liability', subType: 'Current Liability',    description: 'Amounts owed to suppliers' },
-                    { code: '2100', name: 'VAT / Sales Tax Payable',     type: 'Liability', subType: 'Current Liability',    description: 'Tax collected and due to be remitted' },
-                    { code: '2150', name: 'VAT / Sales Tax Recoverable', type: 'Asset',     subType: 'Current Asset',        description: 'Input tax reclaimable from tax authority' },
+                    { code: '2100', name: 'VAT Control Account',         type: 'Liability', subType: 'Current Liability',    description: 'All VAT postings go here — credits on sales, debits on purchases. Net balance = amount owed to (or from) HMRC.' },
                     { code: '2200', name: 'Accrued Expenses',            type: 'Liability', subType: 'Current Liability',    description: 'Expenses incurred but not yet paid' },
                     { code: '2300', name: 'Short-Term Loans',            type: 'Liability', subType: 'Current Liability',    description: 'Borrowings due within one year' },
                     { code: '2500', name: 'Long-Term Loans',             type: 'Liability', subType: 'Non-Current Liability',description: 'Borrowings due after one year' },
