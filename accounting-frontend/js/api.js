@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = 'http://172.16.2.247:5000/api';
+const API_BASE_URL = 'https://172.16.2.247:5000/api';
 const TOKEN_KEY = 'authToken';
 const USER_KEY = 'currentUser';
 const ORG_KEY = 'selectedOrganisation';
