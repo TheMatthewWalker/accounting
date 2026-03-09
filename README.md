@@ -8,8 +8,8 @@ A professional-grade accounting backend built with ASP.NET Core 8, featuring ful
 
 - **General Ledger** — Create and manage GL accounts across five account types (Asset, Liability, Equity, Revenue, Expense)
 - **Daybook Entries** — Record Sales, Purchase, Journal, Receipt, Payment, and Contra transactions with enforced debit/credit balance
-- **Financial Reports** — Trial balance, T-accounts, and general ledger with date-range filtering
-- **Customer & Supplier Management** — Subsidiary ledger support linked to control accounts (AR/AP)
+- **Financial Reports** — Trial balance, T-accounts, and general ledger with date-range filtering; PDF and Excel export
+- **Customer & Supplier Management** — Subsidiary ledger support linked to control accounts (AR/AP); outstanding invoices/bills view
 - **Multi-Organisation** — Complete data isolation per organisation; users can belong to multiple organisations
 - **JWT Authentication** — Stateless auth with configurable token expiry
 - **Structured Logging** — Serilog with rolling file and console sinks, environment-specific log levels
@@ -32,7 +32,7 @@ accounting/
 │   │   └── ApiResponse.cs           # Standardised error response envelope
 │   ├── Data/
 │   │   └── ApplicationDbContext.cs
-│   ├── Migrations/                  # EF Core migrations
+│   ├── Migrations/                  # EF Core migrations (PostgreSQL)
 │   ├── Middleware/
 │   │   ├── ExceptionHandlingMiddleware.cs   # Maps exceptions → HTTP status codes
 │   │   └── RequestResponseLoggingMiddleware.cs
@@ -53,19 +53,20 @@ accounting/
 │   │   ├── OrganisationsControllerTests.cs
 │   │   └── IntegrationTests.cs
 │   ├── Program.cs
-│   ├── appsettings.json
-│   └── appsettings.Development.json
+│   ├── appsettings.json             # Local development defaults
+│   ├── appsettings.Development.json # Dev-specific logging overrides
+│   └── appsettings.Production.json  # Production overrides (fill in before deploying)
 │
 ├── accounting-frontend/             # Vanilla HTML/CSS/JS frontend
 │   ├── pages/                       # Application pages
 │   ├── js/
 │   │   ├── api.js                   # API service layer
+│   │   ├── export.js                # PDF/Excel export utility
 │   │   └── main.js
 │   ├── css/style.css
 │   └── index.html
 │
-├── accounting.sln
-└── DATABASE_SETUP.md
+└── accounting.sln
 ```
 
 ---
@@ -75,43 +76,46 @@ accounting/
 | Layer | Technology |
 |---|---|
 | Framework | ASP.NET Core 8 |
-| Database | SQL Server (EF Core, code-first migrations) |
+| Database | PostgreSQL (Npgsql + EF Core 8, code-first migrations) |
 | Authentication | JWT Bearer |
 | Logging | Serilog (console + rolling file) |
 | API Docs | Swagger / OpenAPI |
 | Testing | xUnit, WebApplicationFactory, FluentAssertions |
 | Frontend | Vanilla HTML5 / CSS3 / ES6+ JavaScript |
+| PDF export | jsPDF + jsPDF-AutoTable (client-side, CDN) |
+| Excel export | SheetJS / xlsx (client-side, CDN) |
 
 ---
 
-## Getting Started
+## Local Development Setup
 
 ### Prerequisites
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- SQL Server Express (or any SQL Server instance)
-- Optionally: SQL Server Management Studio (SSMS)
+- PostgreSQL 14+ running locally (e.g. via [PostgreSQL installer](https://www.postgresql.org/download/) or Docker)
 
-### 1. Configure the database connection
+### 1. Create the database
 
-Edit `accounting-backend/appsettings.json`:
+Connect to your local PostgreSQL instance and create a database:
+
+```sql
+CREATE DATABASE "AccountingDB";
+```
+
+### 2. Configure the connection
+
+Edit `accounting-backend/appsettings.json` with your local PostgreSQL credentials:
 
 ```json
 "ConnectionStrings": {
-  "DefaultConnection": "Server=.\\SQLEXPRESS;Database=AccountingDB;Trusted_Connection=true;TrustServerCertificate=true;"
-}
-```
-
-> For SQL Server Authentication: replace `Trusted_Connection=true` with `User Id=sa;Password=YourPassword`.
-> See [DATABASE_SETUP.md](DATABASE_SETUP.md) for full SQL Server installation instructions.
-
-### 2. Configure the JWT secret
-
-In `appsettings.json`, set a strong secret before running in any shared environment:
-
-```json
+  "DefaultConnection": "Host=localhost;Port=5432;Database=AccountingDB;Username=postgres;Password=yourpassword"
+},
+"AllowedOrigins": [
+  "http://localhost:3000",
+  "https://localhost:3000"
+],
 "JwtSettings": {
-  "SecretKey": "replace-with-a-long-random-secret",
+  "SecretKey": "change-this-to-a-long-random-secret-in-development-min-32-chars",
   "ExpirationInMinutes": 60
 }
 ```
@@ -124,8 +128,10 @@ cd accounting-backend
 # Install EF Core CLI tool (first time only)
 dotnet tool install -g dotnet-ef
 
-# Apply migrations and start the API
+# Apply migrations to create the schema
 dotnet ef database update
+
+# Start the API
 dotnet run
 ```
 
@@ -134,7 +140,7 @@ Swagger UI: `http://localhost:5000/swagger`
 
 ### 4. Run the frontend
 
-Open `accounting-frontend/index.html` directly in a browser, or serve it locally:
+Open `accounting-frontend/index.html` directly in a browser, or serve it with Python:
 
 ```bash
 cd accounting-frontend
@@ -144,9 +150,242 @@ python -m http.server 3000
 
 ---
 
+## Hosted / Production Setup
+
+### Prerequisites on your server
+
+- Linux VPS (Ubuntu 22.04+ recommended) or Windows Server
+- PostgreSQL 14+ (can be on the same server or a managed database)
+- .NET 8 Runtime (or SDK if building on the server)
+- A reverse proxy: **Nginx** (recommended) or Apache
+- A domain name with SSL certificate (e.g. via Let's Encrypt / Certbot)
+
+---
+
+### Step 1 — Install .NET 8 Runtime (Ubuntu)
+
+```bash
+wget https://packages.microsoft.com/config/ubuntu/22.04/packages-microsoft-prod.deb -O packages-microsoft-prod.deb
+sudo dpkg -i packages-microsoft-prod.deb
+sudo apt update && sudo apt install -y aspnetcore-runtime-8.0
+```
+
+---
+
+### Step 2 — Install PostgreSQL
+
+```bash
+sudo apt install -y postgresql postgresql-contrib
+sudo systemctl enable postgresql --now
+```
+
+Create the database and a dedicated user:
+
+```bash
+sudo -u postgres psql
+```
+
+```sql
+CREATE USER accounting_user WITH PASSWORD 'a-strong-password-here';
+CREATE DATABASE "AccountingDB" OWNER accounting_user;
+GRANT ALL PRIVILEGES ON DATABASE "AccountingDB" TO accounting_user;
+\q
+```
+
+---
+
+### Step 3 — Publish the backend
+
+Build and publish from your development machine (or on the server if .NET SDK is installed):
+
+```bash
+cd accounting-backend
+dotnet publish -c Release -o ./publish
+```
+
+Copy the `publish/` folder to your server, e.g.:
+
+```bash
+scp -r ./publish user@your-server:/var/www/accubooks/
+```
+
+---
+
+### Step 4 — Configure production settings
+
+On the server, edit `appsettings.Production.json` inside the published folder:
+
+```json
+{
+  "AllowedOrigins": [
+    "https://your-frontend-domain.com"
+  ],
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=AccountingDB;Username=accounting_user;Password=a-strong-password-here"
+  },
+  "JwtSettings": {
+    "SecretKey": "replace-with-a-long-random-secret-min-32-characters"
+  }
+}
+```
+
+> **Generate a strong JWT secret:**
+> ```bash
+> openssl rand -base64 48
+> ```
+
+ASP.NET Core automatically merges `appsettings.Production.json` over `appsettings.json` when `ASPNETCORE_ENVIRONMENT=Production`.
+
+**Alternative — use environment variables** (avoids secrets in files):
+
+```bash
+export ASPNETCORE_ENVIRONMENT=Production
+export ConnectionStrings__DefaultConnection="Host=localhost;Port=5432;Database=AccountingDB;Username=accounting_user;Password=..."
+export JwtSettings__SecretKey="your-secret-here"
+export AllowedOrigins__0="https://your-frontend-domain.com"
+```
+
+---
+
+### Step 5 — Apply database migrations
+
+On the server, run migrations before starting the app for the first time (and after each deployment):
+
+```bash
+cd /var/www/accubooks
+
+# If dotnet-ef is installed on the server:
+dotnet-ef database update --project AccountingApp.dll
+
+# Or apply via the app itself (already configured in Program.cs — runs automatically on startup)
+```
+
+Migrations run automatically on startup via `dbContext.Database.Migrate()` in `Program.cs`, so for simple deployments you can skip the manual step — the schema will be created/updated when the app starts.
+
+---
+
+### Step 6 — Run as a systemd service
+
+Create a service file:
+
+```bash
+sudo nano /etc/systemd/system/accubooks.service
+```
+
+```ini
+[Unit]
+Description=AccuBooks API
+After=network.target postgresql.service
+
+[Service]
+WorkingDirectory=/var/www/accubooks
+ExecStart=/usr/bin/dotnet /var/www/accubooks/AccountingApp.dll
+Restart=always
+RestartSec=10
+KillSignal=SIGINT
+SyslogIdentifier=accubooks
+User=www-data
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=ASPNETCORE_URLS=http://localhost:5000
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable accubooks
+sudo systemctl start accubooks
+sudo systemctl status accubooks
+```
+
+Check logs:
+
+```bash
+sudo journalctl -u accubooks -f
+```
+
+---
+
+### Step 7 — Configure Nginx as a reverse proxy
+
+```bash
+sudo apt install -y nginx
+sudo nano /etc/nginx/sites-available/accubooks
+```
+
+```nginx
+server {
+    listen 80;
+    server_name api.your-domain.com;
+
+    location / {
+        proxy_pass         http://localhost:5000;
+        proxy_http_version 1.1;
+        proxy_set_header   Upgrade $http_upgrade;
+        proxy_set_header   Connection keep-alive;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/accubooks /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+---
+
+### Step 8 — Enable HTTPS with Let's Encrypt
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d api.your-domain.com
+sudo systemctl reload nginx
+```
+
+Certbot automatically renews certificates. HTTPS redirection is enabled automatically in production mode by `Program.cs`.
+
+---
+
+### Step 9 — Serve the frontend
+
+The frontend is plain static files. Copy `accounting-frontend/` to your server and serve it with Nginx:
+
+```nginx
+server {
+    listen 80;
+    server_name your-frontend-domain.com;
+
+    root /var/www/accubooks-frontend;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+Update `accounting-frontend/js/api.js` before deploying — set `BASE_URL` to your API domain:
+
+```js
+const BASE_URL = 'https://api.your-domain.com';
+```
+
+Then run `certbot --nginx -d your-frontend-domain.com` for HTTPS on the frontend too.
+
+---
+
 ## Running Tests
 
-Tests use an in-memory database — no SQL Server required.
+Tests use an in-memory database — no PostgreSQL required.
 
 ```bash
 cd accounting-backend/Tests
@@ -169,7 +408,7 @@ Tests cover:
 
 ## API Reference
 
-All endpoints except `/api/auth/*` require a `Authorization: Bearer <token>` header.
+All endpoints except `/api/auth/*` require an `Authorization: Bearer <token>` header.
 
 ### Authentication
 
@@ -233,6 +472,8 @@ Base path: `/api/organisations/{orgId}/customers` (same pattern for `/suppliers`
 | GET | `/customers/{customerId}` | Get a customer |
 | PUT | `/customers/{customerId}` | Update a customer |
 | DELETE | `/customers/{customerId}` | Soft-delete a customer |
+| GET | `/customers/outstanding` | All unpaid invoices across all customers |
+| GET | `/suppliers/outstanding` | All unpaid bills across all suppliers |
 
 ---
 
@@ -263,6 +504,15 @@ Successful responses return the resource directly. Errors return a consistent en
 ---
 
 ## Configuration
+
+All required values are read from `appsettings.json` (with production overrides in `appsettings.Production.json`). The app will throw an `InvalidOperationException` at startup if any required key is missing, rather than starting with a broken configuration.
+
+| Key | Required | Description |
+|---|---|---|
+| `ConnectionStrings:DefaultConnection` | Yes | PostgreSQL connection string |
+| `AllowedOrigins` | Yes | Array of CORS-allowed frontend origins |
+| `JwtSettings:SecretKey` | Yes | JWT signing key (min 32 characters) |
+| `JwtSettings:ExpirationInMinutes` | No | Token lifetime (default: 60) |
 
 ### Logging (`appsettings.json` / `appsettings.Development.json`)
 
@@ -316,11 +566,9 @@ Every transaction is recorded in a **Daybook Entry** containing two or more **Jo
 
 ## Roadmap
 
-The following improvements are planned for future development.
-
 ### Backend
 
-- [ ] **Role-based authorisation** — enforce Owner/Admin/Member permissions on write operations (currently all authenticated members can write)
+- [ ] **Role-based authorisation** — enforce Owner/Admin/Member permissions on write operations
 - [ ] **Pagination** — add `page` / `pageSize` query parameters to all list endpoints
 - [ ] **Audit trail** — record who created or modified each record and when
 - [ ] **OAuth2 login** — Google and Microsoft sign-in (stubs exist in config and User model)
@@ -329,49 +577,44 @@ The following improvements are planned for future development.
 - [ ] **Multi-currency** — store currency on transactions and convert for reporting
 - [ ] **Bank reconciliation** — match bank statement lines to posted daybook entries
 - [ ] **Tax compliance reports** — VAT/GST summary reports
-- [ ] **Soft-delete recovery** — admin endpoint to restore soft-deleted records
 - [ ] **Batch import/export** — CSV upload for bulk GL accounts and transactions
-
-### Reporting
-
-- [ ] **PDF export** — generate printable versions of trial balance and general ledger
-- [ ] **Profit & Loss statement** — derived from Revenue and Expense accounts
-- [ ] **Balance sheet** — derived from Asset, Liability, and Equity accounts
-- [ ] **Cash flow statement**
-
-### Frontend
-
-- [ ] **Connect to live API** — the frontend currently uses placeholder data; wire up to the backend
-- [ ] **Suppliers page** — the supplier management page is not yet built
-- [ ] **Reports page** — build UI for trial balance, T-accounts, and general ledger
-- [ ] **Real-time updates** — WebSocket or polling for multi-user environments
 
 ### Infrastructure
 
-- [ ] **Docker / Docker Compose** — containerise the API and SQL Server for easy local setup
+- [ ] **Docker / Docker Compose** — containerise the API and PostgreSQL for easy local setup
 - [ ] **CI pipeline** — run the 82 integration tests on every pull request
-- [ ] **Production deployment guide** — IIS / Kestrel behind reverse proxy, HTTPS, environment secrets
 
 ---
 
 ## Security Notes
 
-1. **JWT secret** — the default key in `appsettings.json` is for development only; replace it before any shared deployment
-2. **Connection string** — do not commit credentials; use environment variables or `dotnet user-secrets` in production
-3. **HTTPS** — HTTPS redirection is off in development mode; enable it in production
-4. **CORS** — currently allows `localhost:3000`; restrict to your actual frontend origin in production
-5. **SQL injection** — all database access goes through EF Core parameterised queries
+1. **JWT secret** — never use the placeholder value from `appsettings.json` in production; generate a random secret (`openssl rand -base64 48`) and store it in `appsettings.Production.json` or an environment variable
+2. **Connection string** — do not commit credentials; use `appsettings.Production.json` (keep out of source control) or environment variables
+3. **HTTPS** — HTTPS redirection is off in Development mode; it is enabled automatically in Production via `Program.cs`
+4. **CORS** — `AllowedOrigins` in `appsettings.json` defaults to localhost; always set your real frontend origin in production
+5. **PostgreSQL user** — create a dedicated database user with only the permissions needed (not the `postgres` superuser)
+6. **SQL injection** — all database access goes through EF Core parameterised queries
 
 ---
 
 ## Troubleshooting
 
+**App fails to start with `InvalidOperationException`**
+- A required config key is missing. Check that `AllowedOrigins`, `ConnectionStrings:DefaultConnection`, and `JwtSettings:SecretKey` are all present in your active `appsettings.json` or environment variables.
+
 **`dotnet ef database update` fails**
-- Verify SQL Server is running: `Get-Service -Name "MSSQL$SQLEXPRESS"` (PowerShell)
-- Check the connection string matches your instance name and credentials
+- Verify PostgreSQL is running: `sudo systemctl status postgresql`
+- Check that the connection string in `appsettings.json` matches your host, port, username, and password
+- Ensure the database exists: `psql -U postgres -c "\l"`
 
 **Port already in use**
+
 ```bash
+# Linux
+sudo ss -tlnp | grep 5000
+sudo kill <PID>
+
+# Windows
 netstat -ano | findstr :5000
 taskkill /PID <PID> /F
 ```
@@ -381,6 +624,10 @@ taskkill /PID <PID> /F
 
 **Circular reference error in JSON response**
 - EF Core navigation property fixup can create cycles; `ReferenceHandler.IgnoreCycles` is already set in `Program.cs`
+
+**Nginx returns 502 Bad Gateway**
+- Check the app is running: `sudo systemctl status accubooks`
+- Verify the port in your Nginx config matches `ASPNETCORE_URLS` in the service file
 
 ---
 
