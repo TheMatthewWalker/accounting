@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Products & Services - AccuBooks</title>
+    <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: var(--primary-color); margin-bottom: 10px;">AccuBooks</h3>
+                <select id="organisationSelect" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="">Select Organisation</option>
+                </select>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html">📊 Dashboard</a></li>
+                <li><a href="gl-accounts.html">📖 GL Accounts</a></li>
+                <li><a href="daybook.html">📝 Daybook</a></li>
+                <li><a href="reports.html">📈 Reports</a></li>
+                <li><a href="customers.html">👥 Customers</a></li>
+                <li><a href="suppliers.html">🏢 Suppliers</a></li>
+                <li><a href="products.html" class="active">📦 Products & Services</a></li>
+                <li><a href="organisations.html">🏭 Organisations</a></li>
+                <li><hr style="margin: 15px 0;"></li>
+                <li><a href="#logout" id="logoutBtn">🚪 Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div class="dashboard-header">
+                <h1>Products & Services</h1>
+                <p>Manage your product and service catalogue for quick invoice entry</p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <button class="btn btn-primary" onclick="showForm()">+ Add Product / Service</button>
+            </div>
+
+            <!-- FORM -->
+            <div id="productForm" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <h3 id="formTitle">Add Product / Service</h3>
+                <input type="hidden" id="editingId">
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <label>Name *</label>
+                        <input type="text" id="pName" placeholder="e.g. Web Design, Widget A">
+                    </div>
+                    <div class="form-group">
+                        <label>Code / SKU</label>
+                        <input type="text" id="pCode" placeholder="e.g. WD-001">
+                    </div>
+                    <div class="form-group">
+                        <label>VAT Treatment</label>
+                        <select id="pVat">
+                            <option value="standard">Standard Rate (20%)</option>
+                            <option value="reduced">Reduced Rate (5%)</option>
+                            <option value="zero">Zero Rated (0%)</option>
+                            <option value="exempt">VAT Exempt</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Default Sale Price (excl. VAT)</label>
+                        <input type="number" id="pSalePrice" step="0.01" min="0" value="0.00" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Default Purchase Price (excl. VAT)</label>
+                        <input type="number" id="pPurchasePrice" step="0.01" min="0" value="0.00" placeholder="0.00">
+                    </div>
+                    <div class="form-group">
+                        <label>Description</label>
+                        <input type="text" id="pDesc" placeholder="Optional description">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn btn-success" onclick="saveProduct()">Save</button>
+                    <button class="btn btn-secondary" onclick="hideForm()">Cancel</button>
+                </div>
+            </div>
+
+            <!-- TABLE -->
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Sale Price</th>
+                            <th>Purchase Price</th>
+                            <th>VAT</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="productsTable">
+                        <tr><td colspan="7" style="text-align:center; color:var(--secondary-color);">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { ApiService, UIUtils, AuthGuard } from '../js/api.js';
+
+        AuthGuard.init();
+
+        function escHtml(str) {
+            return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        const vatLabels = { standard: 'Standard (20%)', reduced: 'Reduced (5%)', zero: 'Zero (0%)', exempt: 'Exempt' };
+
+        window.showForm = () => {
+            document.getElementById('formTitle').textContent = 'Add Product / Service';
+            document.getElementById('editingId').value = '';
+            document.getElementById('pName').value = '';
+            document.getElementById('pCode').value = '';
+            document.getElementById('pDesc').value = '';
+            document.getElementById('pSalePrice').value = '0.00';
+            document.getElementById('pPurchasePrice').value = '0.00';
+            document.getElementById('pVat').value = 'standard';
+            document.getElementById('productForm').style.display = 'block';
+            document.getElementById('productForm').scrollIntoView({ behavior: 'smooth' });
+        };
+
+        window.editProduct = (id, name, code, desc, salePrice, purchasePrice, vat) => {
+            document.getElementById('formTitle').textContent = 'Edit Product / Service';
+            document.getElementById('editingId').value = id;
+            document.getElementById('pName').value = name;
+            document.getElementById('pCode').value = code;
+            document.getElementById('pDesc').value = desc;
+            document.getElementById('pSalePrice').value = salePrice;
+            document.getElementById('pPurchasePrice').value = purchasePrice;
+            document.getElementById('pVat').value = vat;
+            document.getElementById('productForm').style.display = 'block';
+            document.getElementById('productForm').scrollIntoView({ behavior: 'smooth' });
+        };
+
+        window.hideForm = () => {
+            document.getElementById('productForm').style.display = 'none';
+        };
+
+        window.saveProduct = async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
+            const name = document.getElementById('pName').value.trim();
+            if (!name) { UIUtils.showAlert('Name is required', 'error'); return; }
+
+            const payload = {
+                name,
+                code: document.getElementById('pCode').value.trim() || null,
+                description: document.getElementById('pDesc').value.trim() || null,
+                defaultSalePrice: parseFloat(document.getElementById('pSalePrice').value) || 0,
+                defaultPurchasePrice: parseFloat(document.getElementById('pPurchasePrice').value) || 0,
+                vatTreatment: document.getElementById('pVat').value,
+                isActive: true
+            };
+
+            const editingId = document.getElementById('editingId').value;
+            UIUtils.showLoading();
+            const response = editingId
+                ? await ApiService.updateProduct(orgId, editingId, payload)
+                : await ApiService.createProduct(orgId, payload);
+            UIUtils.hideLoading();
+
+            if (response.ok) {
+                UIUtils.showAlert(editingId ? 'Product updated' : 'Product created', 'success');
+                hideForm();
+                loadProducts();
+            } else {
+                UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
+            }
+        };
+
+        window.deleteProduct = async (id, name) => {
+            if (!confirm(`Delete "${name}"?`)) return;
+            const orgId = ApiService.getSelectedOrg();
+            const response = await ApiService.deleteProduct(orgId, id);
+            if (response.ok) { UIUtils.showAlert('Product deleted', 'success'); loadProducts(); }
+            else UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
+        };
+
+        async function loadProducts() {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) return;
+
+            const res = await ApiService.getProducts(orgId);
+            const tbody = document.getElementById('productsTable');
+            if (!res.ok) { tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">Failed to load.</td></tr>'; return; }
+            const products = res.data;
+            if (products.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No products yet. Add your first product or service above.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = products.map(p => `
+                <tr>
+                    <td>${escHtml(p.code || '-')}</td>
+                    <td><strong>${escHtml(p.name)}</strong></td>
+                    <td style="color:var(--secondary-color);font-size:13px;">${escHtml(p.description || '')}</td>
+                    <td>${UIUtils.formatCurrency(p.defaultSalePrice)}</td>
+                    <td>${UIUtils.formatCurrency(p.defaultPurchasePrice)}</td>
+                    <td><span style="font-size:12px;">${vatLabels[p.vatTreatment] || p.vatTreatment}</span></td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="btn btn-sm btn-secondary" onclick="editProduct('${p.id}','${escHtml(p.name)}','${escHtml(p.code||'')}','${escHtml(p.description||'')}',${p.defaultSalePrice},${p.defaultPurchasePrice},'${p.vatTreatment}')">Edit</button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteProduct('${p.id}','${escHtml(p.name)}')">Delete</button>
+                        </div>
+                    </td>
+                </tr>`).join('');
+        }
+
+        document.getElementById('organisationSelect').addEventListener('change', (e) => {
+            if (e.target.value) { ApiService.setSelectedOrg(e.target.value); loadProducts(); }
+        });
+        document.getElementById('logoutBtn').addEventListener('click', (e) => {
+            e.preventDefault(); ApiService.logout(); window.location.href = 'login.html';
+        });
+
+        await ApiService.populateOrganisationSelector();
+        loadProducts();
+    </script>
+</body>
+</html>

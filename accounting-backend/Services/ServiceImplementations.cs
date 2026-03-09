@@ -635,7 +635,7 @@ public class DaybookService : IDaybookService
         return await MapToDaybookResponse(entry);
     }
 
-    public async Task<DaybookResponse> CreateSalesReturnDaybookAsync(Guid organisationId, CreateSalesDaybookRequest request)
+    public async Task<DaybookResponse> CreateSalesReturnDaybookAsync(Guid organisationId, CreateSalesReturnDaybookRequest request)
     {
         _logger.LogDebug("Creating Sales Return (credit note) daybook entry for organisation {OrganisationId}", organisationId);
 
@@ -675,7 +675,7 @@ public class DaybookService : IDaybookService
             await ValidateGLAccount(request.VatAccountId.Value, "VAT");
 
         foreach (var line in request.Lines)
-            await ValidateGLAccount(line.RevenueAccountId, "Revenue");
+            await ValidateGLAccount(line.ExpenseAccountId, "Sales Returns Expense");
 
         decimal totalAmount = request.Lines.Sum(l => l.NetAmount + l.VatAmount);
 
@@ -685,10 +685,10 @@ public class DaybookService : IDaybookService
         // CR Receivable (reduce what customer owes)
         AddJournalLine(entry.Id, receivableAccountId, credit: totalAmount, narration: request.Description);
 
-        // DR Revenue (and VAT) per line — reversed
+        // DR Sales Returns Expense (and DR VAT) per line
         foreach (var line in request.Lines)
         {
-            AddJournalLine(entry.Id, line.RevenueAccountId, debit: line.NetAmount, narration: line.Description);
+            AddJournalLine(entry.Id, line.ExpenseAccountId, debit: line.NetAmount, narration: line.Description);
             if (line.VatAmount > 0)
                 AddJournalLine(entry.Id, request.VatAccountId!.Value, debit: line.VatAmount, narration: $"VAT on {line.Description}");
         }
@@ -895,6 +895,173 @@ public class DaybookService : IDaybookService
             throw new ResourceNotFoundException($"GL Account ({role})", accountId.ToString());
     }
 
+    // ---- Simplified invoice methods (GL accounts auto-resolved) ----
+
+    public async Task<DaybookResponse> CreateSimpleSalesDaybookAsync(Guid organisationId, SimpleInvoiceRequest request)
+    {
+        if (request.EntryDate.Date > DateTime.UtcNow.Date)
+            throw new ValidationException("Entry date cannot be in the future.");
+
+        var (org, arAccountId, vatAccountId) = await ResolveOrgDefaults(organisationId, "1100");
+        var (customerId, resolvedArId) = await ResolveCustomer(request.CustomerId, arAccountId);
+        arAccountId = resolvedArId;
+        var lines = await ResolveSimpleLines(organisationId, request.Lines, org, "4000");
+        decimal total = lines.Sum(l => l.netAmount + l.vatAmount);
+
+        var entry = BuildDaybookEntry(organisationId, "Sales", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        _context.DaybookEntries.Add(entry);
+        AddJournalLine(entry.Id, arAccountId, debit: total, narration: request.Description);
+        foreach (var (accountId, desc, netAmount, vatAmount) in lines)
+        {
+            AddJournalLine(entry.Id, accountId, credit: netAmount, narration: desc);
+            if (vatAmount > 0 && vatAccountId.HasValue)
+                AddJournalLine(entry.Id, vatAccountId.Value, credit: vatAmount, narration: $"VAT on {desc}");
+        }
+        await _context.SaveChangesAsync();
+        return await MapToDaybookResponse(entry);
+    }
+
+    public async Task<DaybookResponse> CreateSimpleSalesReturnDaybookAsync(Guid organisationId, SimpleInvoiceRequest request)
+    {
+        if (request.EntryDate.Date > DateTime.UtcNow.Date)
+            throw new ValidationException("Entry date cannot be in the future.");
+
+        var (org, arAccountId, vatAccountId) = await ResolveOrgDefaults(organisationId, "1100");
+        var (customerId, resolvedArId) = await ResolveCustomer(request.CustomerId, arAccountId);
+        arAccountId = resolvedArId;
+        var lines = await ResolveSimpleLines(organisationId, request.Lines, org, "4100");
+        decimal total = lines.Sum(l => l.netAmount + l.vatAmount);
+
+        var entry = BuildDaybookEntry(organisationId, "SalesReturn", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        _context.DaybookEntries.Add(entry);
+        AddJournalLine(entry.Id, arAccountId, credit: total, narration: request.Description);
+        foreach (var (accountId, desc, netAmount, vatAmount) in lines)
+        {
+            AddJournalLine(entry.Id, accountId, debit: netAmount, narration: desc);
+            if (vatAmount > 0 && vatAccountId.HasValue)
+                AddJournalLine(entry.Id, vatAccountId.Value, debit: vatAmount, narration: $"VAT on {desc}");
+        }
+        await _context.SaveChangesAsync();
+        return await MapToDaybookResponse(entry);
+    }
+
+    public async Task<DaybookResponse> CreateSimplePurchaseDaybookAsync(Guid organisationId, SimpleInvoiceRequest request)
+    {
+        if (request.EntryDate.Date > DateTime.UtcNow.Date)
+            throw new ValidationException("Entry date cannot be in the future.");
+
+        var (org, apAccountId, vatAccountId) = await ResolveOrgDefaults(organisationId, "2000");
+        var (supplierId, resolvedApId) = await ResolveSupplier(request.SupplierId, apAccountId);
+        apAccountId = resolvedApId;
+        var lines = await ResolveSimpleLines(organisationId, request.Lines, org, "5000");
+        decimal total = lines.Sum(l => l.netAmount + l.vatAmount);
+
+        var entry = BuildDaybookEntry(organisationId, "Purchase", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        _context.DaybookEntries.Add(entry);
+        foreach (var (accountId, desc, netAmount, vatAmount) in lines)
+        {
+            AddJournalLine(entry.Id, accountId, debit: netAmount, narration: desc);
+            if (vatAmount > 0 && vatAccountId.HasValue)
+                AddJournalLine(entry.Id, vatAccountId.Value, debit: vatAmount, narration: $"VAT on {desc}");
+        }
+        AddJournalLine(entry.Id, apAccountId, credit: total, narration: request.Description);
+        await _context.SaveChangesAsync();
+        return await MapToDaybookResponse(entry);
+    }
+
+    public async Task<DaybookResponse> CreateSimplePurchaseReturnDaybookAsync(Guid organisationId, SimpleInvoiceRequest request)
+    {
+        if (request.EntryDate.Date > DateTime.UtcNow.Date)
+            throw new ValidationException("Entry date cannot be in the future.");
+
+        var (org, apAccountId, vatAccountId) = await ResolveOrgDefaults(organisationId, "2000");
+        var (supplierId, resolvedApId) = await ResolveSupplier(request.SupplierId, apAccountId);
+        apAccountId = resolvedApId;
+        var lines = await ResolveSimpleLines(organisationId, request.Lines, org, "5100");
+        decimal total = lines.Sum(l => l.netAmount + l.vatAmount);
+
+        var entry = BuildDaybookEntry(organisationId, "PurchaseReturn", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        _context.DaybookEntries.Add(entry);
+        AddJournalLine(entry.Id, apAccountId, debit: total, narration: request.Description);
+        foreach (var (accountId, desc, netAmount, vatAmount) in lines)
+        {
+            AddJournalLine(entry.Id, accountId, credit: netAmount, narration: desc);
+            if (vatAmount > 0 && vatAccountId.HasValue)
+                AddJournalLine(entry.Id, vatAccountId.Value, credit: vatAmount, narration: $"VAT on {desc}");
+        }
+        await _context.SaveChangesAsync();
+        return await MapToDaybookResponse(entry);
+    }
+
+    // Resolve org defaults: returns (org, controlAccountId, vatAccountId?)
+    private async Task<(Organisation org, Guid controlAccountId, Guid? vatAccountId)> ResolveOrgDefaults(Guid organisationId, string controlAccountCode)
+    {
+        var org = await _context.Organisations.FindAsync(organisationId)
+            ?? throw new ResourceNotFoundException("Organisation", organisationId.ToString());
+
+        var controlAccount = await _context.GLAccounts
+            .FirstOrDefaultAsync(a => a.OrganisationId == organisationId && a.Code == controlAccountCode && a.IsActive)
+            ?? throw new BusinessRuleException($"Default account '{controlAccountCode}' not found. Please set up your chart of accounts.", "MISSING_DEFAULT_ACCOUNT");
+
+        return (org, controlAccount.Id, org.DefaultVatAccountId);
+    }
+
+    private async Task<(Guid? customerId, Guid arAccountId)> ResolveCustomer(Guid? customerId, Guid arAccountId)
+    {
+        if (!customerId.HasValue) return (null, arAccountId);
+        var customer = await _context.Customers.FindAsync(customerId.Value)
+            ?? throw new ResourceNotFoundException("Customer", customerId.Value.ToString());
+        return (customer.Id, customer.ControlAccountId ?? arAccountId);
+    }
+
+    private async Task<(Guid? supplierId, Guid apAccountId)> ResolveSupplier(Guid? supplierId, Guid apAccountId)
+    {
+        if (!supplierId.HasValue) return (null, apAccountId);
+        var supplier = await _context.Suppliers.FindAsync(supplierId.Value)
+            ?? throw new ResourceNotFoundException("Supplier", supplierId.Value.ToString());
+        return (supplier.Id, supplier.ControlAccountId ?? apAccountId);
+    }
+
+    private async Task<List<(Guid accountId, string desc, decimal netAmount, decimal vatAmount)>> ResolveSimpleLines(
+        Guid organisationId, List<SimpleInvoiceLine> lines, Organisation org, string defaultAccountCode)
+    {
+        var result = new List<(Guid, string, decimal, decimal)>();
+        var defaultAccount = await _context.GLAccounts
+            .FirstOrDefaultAsync(a => a.OrganisationId == organisationId && a.Code == defaultAccountCode && a.IsActive)
+            ?? throw new BusinessRuleException($"Default account '{defaultAccountCode}' not found. Please set up your chart of accounts.", "MISSING_DEFAULT_ACCOUNT");
+
+        foreach (var line in lines)
+        {
+            var accountId = defaultAccount.Id;
+            var description = line.Description ?? string.Empty;
+            var vatTreatment = line.VatTreatment;
+
+            if (line.ProductId.HasValue)
+            {
+                var product = await _context.Products.FindAsync(line.ProductId.Value);
+                if (product != null)
+                {
+                    if (string.IsNullOrWhiteSpace(description))
+                        description = product.Name;
+                    if (vatTreatment == "standard") // only override if not explicitly changed
+                        vatTreatment = product.VatTreatment;
+                }
+            }
+
+            var vatRate = vatTreatment switch
+            {
+                "standard" => org.VatFullRate,
+                "reduced"  => org.VatReducedRate,
+                _ => 0m
+            };
+
+            var netAmount = Math.Round(line.Quantity * line.UnitPrice, 2);
+            var vatAmount = vatTreatment is "exempt" or "zero" ? 0m : Math.Round(netAmount * vatRate / 100, 2);
+            result.Add((accountId, description, netAmount, vatAmount));
+        }
+        return result;
+    }
+
     private DaybookEntry BuildDaybookEntry(Guid organisationId, string type, string? reference, DateTime entryDate, string? description, Guid? customerId, Guid? supplierId)
     {
         return new DaybookEntry
@@ -970,6 +1137,90 @@ public class DaybookService : IDaybookService
             Lines = lines
         };
     }
+}
+
+public class ProductCatalogueService : IProductService
+{
+    private readonly ApplicationDbContext _context;
+    private readonly ILogger<ProductCatalogueService> _logger;
+
+    public ProductCatalogueService(ApplicationDbContext context, ILogger<ProductCatalogueService> logger)
+    {
+        _context = context;
+        _logger = logger;
+    }
+
+    public async Task<ProductServiceResponse> CreateAsync(Guid organisationId, CreateProductServiceRequest request)
+    {
+        var product = new ProductService
+        {
+            Id = Guid.NewGuid(),
+            OrganisationId = organisationId,
+            Name = request.Name,
+            Code = request.Code,
+            Description = request.Description,
+            DefaultSalePrice = request.DefaultSalePrice,
+            DefaultPurchasePrice = request.DefaultPurchasePrice,
+            VatTreatment = request.VatTreatment,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        };
+        _context.Products.Add(product);
+        await _context.SaveChangesAsync();
+        _logger.LogInformation("Product {ProductId} created for organisation {OrgId}", product.Id, organisationId);
+        return Map(product);
+    }
+
+    public async Task<ProductServiceResponse> GetAsync(Guid productId)
+    {
+        var product = await _context.Products.FindAsync(productId)
+            ?? throw new ResourceNotFoundException("Product", productId.ToString());
+        return Map(product);
+    }
+
+    public async Task<IEnumerable<ProductServiceResponse>> GetByOrganisationAsync(Guid organisationId)
+    {
+        var products = await _context.Products
+            .Where(p => p.OrganisationId == organisationId && p.IsActive)
+            .OrderBy(p => p.Name)
+            .ToListAsync();
+        return products.Select(Map);
+    }
+
+    public async Task<ProductServiceResponse> UpdateAsync(Guid productId, UpdateProductServiceRequest request)
+    {
+        var product = await _context.Products.FindAsync(productId)
+            ?? throw new ResourceNotFoundException("Product", productId.ToString());
+        product.Name = request.Name;
+        product.Code = request.Code;
+        product.Description = request.Description;
+        product.DefaultSalePrice = request.DefaultSalePrice;
+        product.DefaultPurchasePrice = request.DefaultPurchasePrice;
+        product.VatTreatment = request.VatTreatment;
+        product.IsActive = request.IsActive;
+        await _context.SaveChangesAsync();
+        return Map(product);
+    }
+
+    public async Task DeleteAsync(Guid productId)
+    {
+        var product = await _context.Products.FindAsync(productId)
+            ?? throw new ResourceNotFoundException("Product", productId.ToString());
+        product.IsActive = false;
+        await _context.SaveChangesAsync();
+    }
+
+    private static ProductServiceResponse Map(ProductService p) => new()
+    {
+        Id = p.Id,
+        Name = p.Name,
+        Code = p.Code,
+        Description = p.Description,
+        DefaultSalePrice = p.DefaultSalePrice,
+        DefaultPurchasePrice = p.DefaultPurchasePrice,
+        VatTreatment = p.VatTreatment,
+        IsActive = p.IsActive
+    };
 }
 
 public class ReportService : IReportService

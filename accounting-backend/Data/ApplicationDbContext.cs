@@ -19,6 +19,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Customer> Customers { get; set; }
     public DbSet<Supplier> Suppliers { get; set; }
     public DbSet<AccountBalance> AccountBalances { get; set; }
+    public DbSet<ProductService> Products { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -144,6 +145,14 @@ public class ApplicationDbContext : DbContext
             .HasOne(ab => ab.GLAccount)
             .WithMany()
             .HasForeignKey(ab => ab.GLAccountId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // ProductService configuration
+        modelBuilder.Entity<ProductService>().HasKey(p => p.Id);
+        modelBuilder.Entity<ProductService>()
+            .HasOne(p => p.Organisation)
+            .WithMany(o => o.Products)
+            .HasForeignKey(p => p.OrganisationId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

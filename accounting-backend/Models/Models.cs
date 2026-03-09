@@ -62,6 +62,7 @@ public class Organisation
     public ICollection<DaybookEntry> DaybookEntries { get; set; } = new List<DaybookEntry>();
     public ICollection<Customer> Customers { get; set; } = new List<Customer>();
     public ICollection<Supplier> Suppliers { get; set; } = new List<Supplier>();
+    public ICollection<ProductService> Products { get; set; } = new List<ProductService>();
 }
 
 /// <summary>
@@ -214,6 +215,31 @@ public class Supplier
     // Navigation properties
     public Organisation? Organisation { get; set; }
     public GLAccount? ControlAccount { get; set; }
+}
+
+/// <summary>
+/// Represents a product or service that can be invoiced
+/// </summary>
+public class ProductService
+{
+    public Guid Id { get; set; }
+    public Guid OrganisationId { get; set; }
+    [Required]
+    [StringLength(200, MinimumLength = 1)]
+    public string Name { get; set; } = string.Empty;
+    [StringLength(50)]
+    public string? Code { get; set; }
+    public string? Description { get; set; }
+    public decimal DefaultSalePrice { get; set; }
+    public decimal DefaultPurchasePrice { get; set; }
+    [Required]
+    [RegularExpression("^(standard|reduced|zero|exempt)$")]
+    public string VatTreatment { get; set; } = "standard";
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Navigation properties
+    public Organisation? Organisation { get; set; }
 }
 
 /// <summary>

@@ -121,11 +121,16 @@ public interface IDaybookService
 {
     Task<DaybookResponse> CreateDaybookEntryAsync(Guid organisationId, CreateDaybookRequest request);
     Task<DaybookResponse> CreateSalesDaybookAsync(Guid organisationId, CreateSalesDaybookRequest request);
-    Task<DaybookResponse> CreateSalesReturnDaybookAsync(Guid organisationId, CreateSalesDaybookRequest request);
+    Task<DaybookResponse> CreateSalesReturnDaybookAsync(Guid organisationId, CreateSalesReturnDaybookRequest request);
     Task<DaybookResponse> CreatePurchaseDaybookAsync(Guid organisationId, CreatePurchaseDaybookRequest request);
     Task<DaybookResponse> CreatePurchaseReturnDaybookAsync(Guid organisationId, CreatePurchaseDaybookRequest request);
     Task<DaybookResponse> CreateReceiptDaybookAsync(Guid organisationId, CreateReceiptDaybookRequest request);
     Task<DaybookResponse> CreatePaymentDaybookAsync(Guid organisationId, CreatePaymentDaybookRequest request);
+    // Simplified methods — GL accounts auto-resolved from org defaults / product catalogue
+    Task<DaybookResponse> CreateSimpleSalesDaybookAsync(Guid organisationId, SimpleInvoiceRequest request);
+    Task<DaybookResponse> CreateSimpleSalesReturnDaybookAsync(Guid organisationId, SimpleInvoiceRequest request);
+    Task<DaybookResponse> CreateSimplePurchaseDaybookAsync(Guid organisationId, SimpleInvoiceRequest request);
+    Task<DaybookResponse> CreateSimplePurchaseReturnDaybookAsync(Guid organisationId, SimpleInvoiceRequest request);
     Task<DaybookResponse> GetDaybookEntryAsync(Guid entryId);
     Task<IEnumerable<DaybookResponse>> GetDaybookEntriesByOrganisationAsync(Guid organisationId, DateTime? fromDate = null, DateTime? toDate = null);
     Task PostDaybookEntryAsync(Guid entryId);
@@ -159,6 +164,36 @@ public class SalesDaybookLine
     [Range(0, double.MaxValue)]
     public decimal VatAmount { get; set; }
     public Guid RevenueAccountId { get; set; }
+}
+
+// ---- Sales Return Daybook ----
+
+public class CreateSalesReturnDaybookRequest
+{
+    public string? ReferenceNumber { get; set; }
+    [Required]
+    public DateTime EntryDate { get; set; }
+    public string? Description { get; set; }
+    // Either CustomerId (with a ControlAccountId) or ReceivableAccountId must be provided
+    public Guid? CustomerId { get; set; }
+    public Guid? ReceivableAccountId { get; set; }
+    // Required when any line has VatAmount > 0
+    public Guid? VatAccountId { get; set; }
+    [Required]
+    [MinLength(1, ErrorMessage = "At least 1 return line is required")]
+    public List<SalesReturnLine> Lines { get; set; } = new();
+}
+
+public class SalesReturnLine
+{
+    [Required]
+    public string Description { get; set; } = string.Empty;
+    [Range(0.01, double.MaxValue, ErrorMessage = "Net amount must be greater than zero")]
+    public decimal NetAmount { get; set; }
+    [Range(0, double.MaxValue)]
+    public decimal VatAmount { get; set; }
+    // The expense account to debit (e.g. Sales Returns & Allowances)
+    public Guid ExpenseAccountId { get; set; }
 }
 
 // ---- Purchase Daybook ----
@@ -490,4 +525,90 @@ public class SupplierResponse
     public decimal CreditLimit { get; set; }
     public decimal CurrentBalance { get; set; }
     public bool IsActive { get; set; }
+}
+
+// ---- Products & Services ----
+
+public interface IProductService
+{
+    Task<ProductServiceResponse> CreateAsync(Guid organisationId, CreateProductServiceRequest request);
+    Task<ProductServiceResponse> GetAsync(Guid productId);
+    Task<IEnumerable<ProductServiceResponse>> GetByOrganisationAsync(Guid organisationId);
+    Task<ProductServiceResponse> UpdateAsync(Guid productId, UpdateProductServiceRequest request);
+    Task DeleteAsync(Guid productId);
+}
+
+public class CreateProductServiceRequest
+{
+    [Required]
+    [StringLength(200, MinimumLength = 1)]
+    public string Name { get; set; } = string.Empty;
+    [StringLength(50)]
+    public string? Code { get; set; }
+    public string? Description { get; set; }
+    [Range(0, double.MaxValue)]
+    public decimal DefaultSalePrice { get; set; }
+    [Range(0, double.MaxValue)]
+    public decimal DefaultPurchasePrice { get; set; }
+    [Required]
+    [RegularExpression("^(standard|reduced|zero|exempt)$")]
+    public string VatTreatment { get; set; } = "standard";
+}
+
+public class UpdateProductServiceRequest
+{
+    [Required]
+    [StringLength(200, MinimumLength = 1)]
+    public string Name { get; set; } = string.Empty;
+    [StringLength(50)]
+    public string? Code { get; set; }
+    public string? Description { get; set; }
+    [Range(0, double.MaxValue)]
+    public decimal DefaultSalePrice { get; set; }
+    [Range(0, double.MaxValue)]
+    public decimal DefaultPurchasePrice { get; set; }
+    [Required]
+    [RegularExpression("^(standard|reduced|zero|exempt)$")]
+    public string VatTreatment { get; set; } = "standard";
+    public bool IsActive { get; set; }
+}
+
+public class ProductServiceResponse
+{
+    public Guid Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string? Code { get; set; }
+    public string? Description { get; set; }
+    public decimal DefaultSalePrice { get; set; }
+    public decimal DefaultPurchasePrice { get; set; }
+    public string VatTreatment { get; set; } = "standard";
+    public bool IsActive { get; set; }
+}
+
+// ---- Simplified invoice request (no GL account selection) ----
+
+public class SimpleInvoiceRequest
+{
+    public string? ReferenceNumber { get; set; }
+    [Required]
+    public DateTime EntryDate { get; set; }
+    public string? Description { get; set; }
+    public Guid? CustomerId { get; set; }
+    public Guid? SupplierId { get; set; }
+    [Required]
+    [MinLength(1, ErrorMessage = "At least 1 line is required")]
+    public List<SimpleInvoiceLine> Lines { get; set; } = new();
+}
+
+public class SimpleInvoiceLine
+{
+    public Guid? ProductId { get; set; }
+    public string? Description { get; set; }
+    [Range(0.01, double.MaxValue)]
+    public decimal Quantity { get; set; } = 1;
+    [Range(0.01, double.MaxValue)]
+    public decimal UnitPrice { get; set; }
+    [Required]
+    [RegularExpression("^(standard|reduced|zero|exempt)$")]
+    public string VatTreatment { get; set; } = "standard";
 }

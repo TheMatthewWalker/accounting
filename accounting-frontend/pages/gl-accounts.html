@@ -22,6 +22,7 @@
                 <li><a href="reports.html">📈 Reports</a></li>
                 <li><a href="customers.html">👥 Customers</a></li>
                 <li><a href="suppliers.html">🏢 Suppliers</a></li>
+                <li><a href="products.html">📦 Products &amp; Services</a></li>
                 <li><a href="organisations.html">🏭 Organisations</a></li>
                 <li><hr style="margin: 15px 0;"></li>
                 <li><a href="#logout" id="logoutBtn">🚪 Logout</a></li>
@@ -34,7 +35,12 @@
                 <p>Manage your chart of accounts</p>
             </div>
 
-            <div style="margin-bottom: 20px; display: flex; gap: 10px;">
+            <div id="freeTierBanner" style="display:none; margin-bottom:20px; padding:14px 18px; background:#fff8e1; border:1px solid #ffe082; border-radius:8px; color:#7a5a00;">
+                🔒 GL account management is available on <strong>Pro</strong> and above.
+                <a href="organisations.html" style="margin-left:8px; color:var(--primary-color);">Upgrade your plan →</a>
+            </div>
+
+            <div id="accountActionBtns" style="margin-bottom: 20px; display: flex; gap: 10px;">
                 <button id="newAccountBtn" class="btn btn-primary">+ New Account</button>
                 <button id="recommendedAccountsBtn" class="btn btn-secondary">⭐ Add Recommended Accounts</button>
             </div>
@@ -136,6 +142,18 @@
         const accountForm = document.getElementById('accountForm');
         const accountsTable = document.getElementById('accountsTable');
 
+        let isFreeTier = false;
+
+        async function applyTierRestrictions(orgId) {
+            const res = await ApiService.getOrganisation(orgId);
+            if (res.ok) {
+                isFreeTier = (res.data.subscriptionTier ?? 'Free') === 'Free';
+            }
+            document.getElementById('freeTierBanner').style.display = isFreeTier ? 'block' : 'none';
+            document.getElementById('accountActionBtns').style.display = isFreeTier ? 'none' : 'flex';
+            if (isFreeTier) accountFormContainer.style.display = 'none';
+        }
+
         newAccountBtn.addEventListener('click', () => {
             document.getElementById('editingAccountId').value = '';
             document.getElementById('accountFormTitle').textContent = 'New GL Account';
@@ -171,10 +189,11 @@
                                 <td>${UIUtils.formatCurrency(account.balance)}</td>
                                 <td>${account.isActive ? '<span style="color: var(--success-color);">✓ Active</span>' : '<span style="color: var(--danger-color);">✗ Inactive</span>'}</td>
                                 <td>
+                                    ${isFreeTier ? '<span style="color:var(--secondary-color);font-size:12px;">View only</span>' : `
                                     <div class="action-buttons">
                                         <button class="btn btn-sm btn-primary" onclick="editAccount('${account.id}')">Edit</button>
                                         <button class="btn btn-sm btn-danger" onclick="deleteAccount('${account.id}')">Delete</button>
-                                    </div>
+                                    </div>`}
                                 </td>
                             </tr>
                         `).join('');
@@ -418,14 +437,17 @@
         // ────────────────────────────────────────────────────────────────────────
 
         // Organization selector
-        document.getElementById('organisationSelect').addEventListener('change', (e) => {
+        document.getElementById('organisationSelect').addEventListener('change', async (e) => {
             if (e.target.value) {
                 ApiService.setSelectedOrg(e.target.value);
+                await applyTierRestrictions(e.target.value);
                 loadAccounts();
             }
         });
 
         await ApiService.populateOrganisationSelector();
+        const savedOrg = ApiService.getSelectedOrg();
+        if (savedOrg) await applyTierRestrictions(savedOrg);
         loadAccounts();
     </script>
 </body>

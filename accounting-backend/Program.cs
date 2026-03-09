@@ -68,6 +68,7 @@ builder.Services.AddScoped<IGLAccountService, GLAccountService>();
 builder.Services.AddScoped<IDaybookService, DaybookService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<ICustomerSupplierService, CustomerSupplierService>();
+builder.Services.AddScoped<IProductService, ProductCatalogueService>();
 
 var app = builder.Build();
 

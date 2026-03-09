@@ -77,7 +77,18 @@ public class OrganisationsController : ControllerBase
             IsActive = true
         });
 
+        // Save org first so GLAccounts can reference it
         await _context.SaveChangesAsync();
+
+        // Auto-create the default chart of accounts
+        var defaultAccounts = GetDefaultChartOfAccounts(org.Id);
+        _context.GLAccounts.AddRange(defaultAccounts);
+        await _context.SaveChangesAsync();
+
+        // Now set DefaultVatAccountId and save again
+        org.DefaultVatAccountId = defaultAccounts.First(a => a.Code == "2100").Id;
+        await _context.SaveChangesAsync();
+
         return CreatedAtAction(nameof(GetOrganisation), new { id = org.Id }, org);
     }
 
@@ -197,6 +208,52 @@ public class OrganisationsController : ControllerBase
     }
 
     // ---- Helpers ----
+
+    private static List<GLAccount> GetDefaultChartOfAccounts(Guid organisationId)
+    {
+        var accounts = new[]
+        {
+            // Assets
+            ("1000", "Bank",                     "Asset",   "Current Asset"),
+            ("1010", "Cash",                     "Asset",   "Current Asset"),
+            ("1100", "Trade Receivables",        "Asset",   "Current Asset"),
+            ("1200", "Inventory",                "Asset",   "Current Asset"),
+            ("1300", "Prepaid Expenses",         "Asset",   "Current Asset"),
+            ("1400", "Property & Furniture",     "Asset",   "Fixed Asset"),
+            ("1410", "Tools & Equipment",        "Asset",   "Fixed Asset"),
+            // Liabilities
+            ("2000", "Trade Payables",           "Liability", "Current Liability"),
+            ("2100", "VAT Control Account",      "Liability", "Current Liability"),
+            ("2200", "Accrued Expenses",         "Liability", "Current Liability"),
+            // Equity
+            ("3000", "Capital",                  "Equity",  null!),
+            ("3100", "Drawings",                 "Equity",  null!),
+            // Revenue
+            ("4000", "Sales",                    "Revenue", null!),
+            ("5200", "Discounts Received",       "Revenue", "Other Income"),
+            // Expenses
+            ("4100", "Sales Returns",            "Expense", "Cost of Sales"),
+            ("4200", "Discounts Allowed",        "Expense", "Operating Expense"),
+            ("5000", "Purchases",                "Expense", "Cost of Sales"),
+            ("5100", "Purchase Returns",         "Expense", "Cost of Sales"),
+            ("5300", "Cost of Goods Sold",       "Expense", "Cost of Sales"),
+            ("6000", "Stationery & Sundries",    "Expense", "Operating Expense"),
+            // Control
+            ("9000", "Suspense Account",         "Asset",   "Current Asset"),
+        };
+
+        return accounts.Select(a => new GLAccount
+        {
+            Id = Guid.NewGuid(),
+            OrganisationId = organisationId,
+            Code = a.Item1,
+            Name = a.Item2,
+            Type = a.Item3,
+            SubType = a.Item4,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow
+        }).ToList();
+    }
 
     private Guid GetUserId()
     {

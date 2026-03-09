@@ -7,13 +7,16 @@
     <link rel="stylesheet" href="../css/style.css">
     <style>
         .daybook-type-btns { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; }
-        .daybook-type-btns button { padding: 8px 16px; border-radius: 6px; border: 2px solid var(--border-color); background: white; cursor: pointer; font-size: 13px; }
+        .daybook-type-btns button { padding: 8px 16px; border-radius: 6px; border: 2px solid var(--border-color); background: white; cursor: pointer; font-size: 13px; font-weight: 500; }
         .daybook-type-btns button:hover { border-color: var(--primary-color); color: var(--primary-color); }
         .entry-lines-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
         .entry-lines-table th { background: var(--light-bg); padding: 8px; text-align: left; font-size: 13px; border-bottom: 1px solid var(--border-color); }
-        .entry-lines-table td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; }
-        .entry-lines-table td input, .entry-lines-table td select { width: 100%; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; }
-        .entry-total { text-align: right; font-weight: 600; padding: 8px; background: var(--light-bg); border-radius: 4px; margin-bottom: 15px; }
+        .entry-lines-table td { padding: 5px 6px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+        .entry-lines-table td input, .entry-lines-table td select { width: 100%; padding: 5px 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 13px; box-sizing: border-box; }
+        .entry-total { text-align: right; font-weight: 600; padding: 10px; background: var(--light-bg); border-radius: 4px; margin-bottom: 15px; font-size: 15px; }
+        .form-hint { font-size: 12px; color: var(--secondary-color); margin-bottom: 15px; padding: 8px 12px; background: #e8f4f8; border-radius: 4px; border-left: 3px solid var(--primary-color); }
+        .section-divider { border: none; border-top: 1px solid var(--border-color); margin: 20px 0; }
+        .adv-toggle { font-size: 12px; color: var(--primary-color); cursor: pointer; text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -32,6 +35,7 @@
                 <li><a href="reports.html">📈 Reports</a></li>
                 <li><a href="customers.html">👥 Customers</a></li>
                 <li><a href="suppliers.html">🏢 Suppliers</a></li>
+                <li><a href="products.html">📦 Products & Services</a></li>
                 <li><a href="organisations.html">🏭 Organisations</a></li>
                 <li><hr style="margin: 15px 0;"></li>
                 <li><a href="#logout" id="logoutBtn">🚪 Logout</a></li>
@@ -57,46 +61,34 @@
             <!-- SALES INVOICE FORM -->
             <div id="form-sales" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Sales Invoice</h3>
-                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">DR Accounts Receivable / CR Revenue / CR VAT (auto-posted to GL)</p>
+                <p class="form-hint">Accounts Receivable is debited automatically. Credits go to your Sales account. VAT is handled via your VAT Control account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                     <div class="form-group">
                         <label>Customer *</label>
-                        <select id="sales-customer" required><option value="">Select customer</option></select>
+                        <select id="sales-customer"><option value="">Select customer</option></select>
                     </div>
                     <div class="form-group">
                         <label>Invoice Date *</label>
-                        <input type="date" id="sales-date" required>
+                        <input type="date" id="sales-date">
                     </div>
                     <div class="form-group">
                         <label>Invoice / Reference No.</label>
                         <input type="text" id="sales-ref" placeholder="INV-001">
                     </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <input type="text" id="sales-desc" placeholder="Optional description">
-                    </div>
-                    <div class="form-group">
-                        <label>VAT Treatment</label>
-                        <select id="sales-vat-type" onchange="updateSalesTotal()">
-                            <option value="exempt">VAT Exempt</option>
-                            <option value="zero">Zero Rated (0%)</option>
-                            <option value="reduced">Reduced Rate (<span id="sales-reduced-rate-label">5</span>%)</option>
-                            <option value="standard" selected>Standard Rate (<span id="sales-standard-rate-label">20</span>%)</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="display:flex; align-items:center;">
-                        <span style="font-size:13px; color:var(--secondary-color);">Rate: <strong id="sales-vat-rate-label">20%</strong> &mdash; VAT account auto-selected from organisation settings</span>
+                    <div class="form-group" style="grid-column: span 3;">
+                        <label>Description (optional)</label>
+                        <input type="text" id="sales-desc" placeholder="e.g. Monthly services for March">
                     </div>
                 </div>
                 <h4>Invoice Lines</h4>
                 <table class="entry-lines-table">
-                    <thead><tr><th>Revenue Account</th><th>Description</th><th>Amount (excl. VAT)</th><th></th></tr></thead>
+                    <thead><tr><th style="width:28%">Product / Service</th><th>Description</th><th style="width:8%">Qty</th><th style="width:12%">Unit Price</th><th style="width:14%">VAT</th><th style="width:12%">Line Total</th><th style="width:4%"></th></tr></thead>
                     <tbody id="sales-lines"></tbody>
                 </table>
                 <button class="btn btn-secondary btn-sm" onclick="addSalesLine()">+ Add Line</button>
-                <div class="entry-total" id="sales-total">Total: £0.00 (+ £0.00 VAT)</div>
+                <div class="entry-total" id="sales-total">Net: £0.00 + VAT: £0.00 = £0.00</div>
                 <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success" onclick="submitSales()">Create Sales Invoice</button>
+                    <button class="btn btn-success" onclick="submitSimple('sales')">Create Sales Invoice</button>
                     <button class="btn btn-secondary" onclick="hideForm('sales')">Cancel</button>
                 </div>
             </div>
@@ -104,47 +96,34 @@
             <!-- SALES RETURN FORM -->
             <div id="form-sales-return" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Sales Return / Credit Note</h3>
-                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">CR Accounts Receivable / DR Revenue / DR VAT (reverses a sales invoice)</p>
+                <p class="form-hint">Reduces what the customer owes (credits Accounts Receivable). Debits the Sales Returns account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                     <div class="form-group">
                         <label>Customer *</label>
-                        <select id="sales-return-customer" required><option value="">Select customer</option></select>
+                        <select id="sales-return-customer"><option value="">Select customer</option></select>
                     </div>
                     <div class="form-group">
                         <label>Date *</label>
-                        <input type="date" id="sales-return-date" required>
+                        <input type="date" id="sales-return-date">
                     </div>
                     <div class="form-group">
                         <label>Credit Note / Reference No.</label>
                         <input type="text" id="sales-return-ref" placeholder="CN-001">
                     </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <input type="text" id="sales-return-desc" placeholder="Optional description">
-                    </div>
-                    <div class="form-group">
-                        <label>VAT Treatment</label>
-                        <select id="sales-return-vat-type" onchange="updateSalesReturnTotal()">
-                            <option value="exempt">VAT Exempt</option>
-                            <option value="zero">Zero Rated (0%)</option>
-                            <option value="reduced">Reduced Rate (<span id="sales-return-reduced-rate-label">5</span>%)</option>
-                            <option value="standard" selected>Standard Rate (<span id="sales-return-standard-rate-label">20</span>%)</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="display:flex; align-items:center;">
-                        <span style="font-size:13px; color:var(--secondary-color);">Rate: <strong id="sales-return-vat-rate-label">20%</strong></span>
+                    <div class="form-group" style="grid-column: span 3;">
+                        <label>Description (optional)</label>
+                        <input type="text" id="sales-return-desc" placeholder="e.g. Returned goods — CN-001">
                     </div>
                 </div>
                 <h4>Return Lines</h4>
-                <p style="font-size:12px; color:var(--secondary-color); margin-bottom:8px;">Select a sales returns expense account (e.g. "Sales Returns &amp; Allowances"). This debits the expense, reducing your net profit.</p>
                 <table class="entry-lines-table">
-                    <thead><tr><th>Returns Expense Account</th><th>Description</th><th>Amount (excl. VAT)</th><th></th></tr></thead>
+                    <thead><tr><th style="width:28%">Product / Service</th><th>Description</th><th style="width:8%">Qty</th><th style="width:12%">Unit Price</th><th style="width:14%">VAT</th><th style="width:12%">Line Total</th><th style="width:4%"></th></tr></thead>
                     <tbody id="sales-return-lines"></tbody>
                 </table>
                 <button class="btn btn-secondary btn-sm" onclick="addSalesReturnLine()">+ Add Line</button>
-                <div class="entry-total" id="sales-return-total">Total: £0.00 (+ £0.00 VAT)</div>
+                <div class="entry-total" id="sales-return-total">Net: £0.00 + VAT: £0.00 = £0.00</div>
                 <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success" onclick="submitSalesReturn()">Create Sales Return</button>
+                    <button class="btn btn-success" onclick="submitSimple('sales-return')">Create Sales Return</button>
                     <button class="btn btn-secondary" onclick="hideForm('sales-return')">Cancel</button>
                 </div>
             </div>
@@ -152,46 +131,34 @@
             <!-- PURCHASE INVOICE FORM -->
             <div id="form-purchase" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Purchase Invoice</h3>
-                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">DR Expense / DR VAT / CR Accounts Payable (auto-posted to GL)</p>
+                <p class="form-hint">Trade Payables is credited automatically. Debits go to your Purchases account. VAT is reclaimed via your VAT Control account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                     <div class="form-group">
                         <label>Supplier *</label>
-                        <select id="purchase-supplier" required><option value="">Select supplier</option></select>
+                        <select id="purchase-supplier"><option value="">Select supplier</option></select>
                     </div>
                     <div class="form-group">
                         <label>Invoice Date *</label>
-                        <input type="date" id="purchase-date" required>
+                        <input type="date" id="purchase-date">
                     </div>
                     <div class="form-group">
                         <label>Supplier Invoice No.</label>
                         <input type="text" id="purchase-ref" placeholder="SINV-001">
                     </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <input type="text" id="purchase-desc" placeholder="Optional description">
-                    </div>
-                    <div class="form-group">
-                        <label>VAT Treatment</label>
-                        <select id="purchase-vat-type" onchange="updatePurchTotal()">
-                            <option value="exempt">VAT Exempt</option>
-                            <option value="zero">Zero Rated (0%)</option>
-                            <option value="reduced">Reduced Rate (<span id="purchase-reduced-rate-label">5</span>%)</option>
-                            <option value="standard" selected>Standard Rate (<span id="purchase-standard-rate-label">20</span>%)</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="display:flex; align-items:center;">
-                        <span style="font-size:13px; color:var(--secondary-color);">Rate: <strong id="purchase-vat-rate-label">20%</strong> &mdash; VAT account auto-selected from organisation settings</span>
+                    <div class="form-group" style="grid-column: span 3;">
+                        <label>Description (optional)</label>
+                        <input type="text" id="purchase-desc" placeholder="e.g. Office supplies March">
                     </div>
                 </div>
                 <h4>Invoice Lines</h4>
                 <table class="entry-lines-table">
-                    <thead><tr><th>Expense Account</th><th>Description</th><th>Amount (excl. VAT)</th><th></th></tr></thead>
+                    <thead><tr><th style="width:28%">Product / Service</th><th>Description</th><th style="width:8%">Qty</th><th style="width:12%">Unit Price</th><th style="width:14%">VAT</th><th style="width:12%">Line Total</th><th style="width:4%"></th></tr></thead>
                     <tbody id="purchase-lines"></tbody>
                 </table>
                 <button class="btn btn-secondary btn-sm" onclick="addPurchLine()">+ Add Line</button>
-                <div class="entry-total" id="purchase-total">Total: £0.00 (+ £0.00 VAT)</div>
+                <div class="entry-total" id="purchase-total">Net: £0.00 + VAT: £0.00 = £0.00</div>
                 <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success" onclick="submitPurchase()">Create Purchase Invoice</button>
+                    <button class="btn btn-success" onclick="submitSimple('purchase')">Create Purchase Invoice</button>
                     <button class="btn btn-secondary" onclick="hideForm('purchase')">Cancel</button>
                 </div>
             </div>
@@ -199,46 +166,34 @@
             <!-- PURCHASE RETURN FORM -->
             <div id="form-purchase-return" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Purchase Return / Debit Note</h3>
-                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">DR Accounts Payable / CR Expense / CR VAT (reverses a purchase invoice)</p>
+                <p class="form-hint">Reduces what you owe the supplier (debits Trade Payables). Credits go to your Purchase Returns account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                     <div class="form-group">
                         <label>Supplier *</label>
-                        <select id="purchase-return-supplier" required><option value="">Select supplier</option></select>
+                        <select id="purchase-return-supplier"><option value="">Select supplier</option></select>
                     </div>
                     <div class="form-group">
                         <label>Date *</label>
-                        <input type="date" id="purchase-return-date" required>
+                        <input type="date" id="purchase-return-date">
                     </div>
                     <div class="form-group">
                         <label>Debit Note / Reference No.</label>
                         <input type="text" id="purchase-return-ref" placeholder="DN-001">
                     </div>
-                    <div class="form-group">
-                        <label>Description</label>
-                        <input type="text" id="purchase-return-desc" placeholder="Optional description">
-                    </div>
-                    <div class="form-group">
-                        <label>VAT Treatment</label>
-                        <select id="purchase-return-vat-type" onchange="updatePurchReturnTotal()">
-                            <option value="exempt">VAT Exempt</option>
-                            <option value="zero">Zero Rated (0%)</option>
-                            <option value="reduced">Reduced Rate (<span id="purchase-return-reduced-rate-label">5</span>%)</option>
-                            <option value="standard" selected>Standard Rate (<span id="purchase-return-standard-rate-label">20</span>%)</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="display:flex; align-items:center;">
-                        <span style="font-size:13px; color:var(--secondary-color);">Rate: <strong id="purchase-return-vat-rate-label">20%</strong></span>
+                    <div class="form-group" style="grid-column: span 3;">
+                        <label>Description (optional)</label>
+                        <input type="text" id="purchase-return-desc" placeholder="e.g. Returned faulty goods">
                     </div>
                 </div>
                 <h4>Return Lines</h4>
                 <table class="entry-lines-table">
-                    <thead><tr><th>Expense Account</th><th>Description</th><th>Amount (excl. VAT)</th><th></th></tr></thead>
+                    <thead><tr><th style="width:28%">Product / Service</th><th>Description</th><th style="width:8%">Qty</th><th style="width:12%">Unit Price</th><th style="width:14%">VAT</th><th style="width:12%">Line Total</th><th style="width:4%"></th></tr></thead>
                     <tbody id="purchase-return-lines"></tbody>
                 </table>
                 <button class="btn btn-secondary btn-sm" onclick="addPurchReturnLine()">+ Add Line</button>
-                <div class="entry-total" id="purchase-return-total">Total: £0.00 (+ £0.00 VAT)</div>
+                <div class="entry-total" id="purchase-return-total">Net: £0.00 + VAT: £0.00 = £0.00</div>
                 <div style="display: flex; gap: 10px;">
-                    <button class="btn btn-success" onclick="submitPurchaseReturn()">Create Purchase Return</button>
+                    <button class="btn btn-success" onclick="submitSimple('purchase-return')">Create Purchase Return</button>
                     <button class="btn btn-secondary" onclick="hideForm('purchase-return')">Cancel</button>
                 </div>
             </div>
@@ -246,19 +201,19 @@
             <!-- RECEIPT FORM -->
             <div id="form-receipt" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Receipt (Cash / Bank)</h3>
-                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">DR Bank / CR Account (auto-posted to GL)</p>
+                <p class="form-hint">Money received into your bank or cash account. DR Bank / CR the source account (e.g. Trade Receivables).</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
                         <label>Bank / Cash Account *</label>
-                        <select id="rcpt-bank" required><option value="">Select account</option></select>
+                        <select id="rcpt-bank"><option value="">Select account</option></select>
                     </div>
                     <div class="form-group">
-                        <label>Credit Account * (e.g. AR / Revenue)</label>
-                        <select id="rcpt-credit" required><option value="">Select account</option></select>
+                        <label>Credit Account * (e.g. Trade Receivables)</label>
+                        <select id="rcpt-credit"><option value="">Select account</option></select>
                     </div>
                     <div class="form-group">
                         <label>Date *</label>
-                        <input type="date" id="rcpt-date" required>
+                        <input type="date" id="rcpt-date">
                     </div>
                     <div class="form-group">
                         <label>Amount *</label>
@@ -282,19 +237,19 @@
             <!-- PAYMENT FORM -->
             <div id="form-payment" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Payment (Cash / Bank)</h3>
-                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">DR Account / CR Bank (auto-posted to GL)</p>
+                <p class="form-hint">Money paid out of your bank or cash account. DR the destination account (e.g. Trade Payables) / CR Bank.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                     <div class="form-group">
                         <label>Bank / Cash Account *</label>
-                        <select id="pay-bank" required><option value="">Select account</option></select>
+                        <select id="pay-bank"><option value="">Select account</option></select>
                     </div>
                     <div class="form-group">
-                        <label>Debit Account * (e.g. AP / Expense)</label>
-                        <select id="pay-debit" required><option value="">Select account</option></select>
+                        <label>Debit Account * (e.g. Trade Payables)</label>
+                        <select id="pay-debit"><option value="">Select account</option></select>
                     </div>
                     <div class="form-group">
                         <label>Date *</label>
-                        <input type="date" id="pay-date" required>
+                        <input type="date" id="pay-date">
                     </div>
                     <div class="form-group">
                         <label>Amount *</label>
@@ -318,11 +273,11 @@
             <!-- MANUAL JOURNAL FORM -->
             <div id="form-journal" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Manual Journal Entry</h3>
-                <p style="color: var(--secondary-color); font-size: 13px; margin-bottom: 15px;">Enter GL lines directly. Debits must equal Credits.</p>
+                <p class="form-hint">For accountants: enter GL lines directly. Debits must equal Credits.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                     <div class="form-group">
                         <label>Date *</label>
-                        <input type="date" id="jnl-date" required>
+                        <input type="date" id="jnl-date">
                     </div>
                     <div class="form-group">
                         <label>Reference</label>
@@ -375,10 +330,11 @@
         let glAccounts = [];
         let customers = [];
         let suppliers = [];
+        let products = [];
         let orgVatSettings = { defaultVatAccountId: null, vatReducedRate: 5, vatFullRate: 20 };
 
         function escHtml(str) {
-            return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+            return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
         // ---- Form show/hide ----
@@ -386,6 +342,10 @@
             document.querySelectorAll('.entry-form').forEach(f => f.style.display = 'none');
             document.getElementById(`form-${type}`).style.display = 'block';
             document.getElementById(`form-${type}`).scrollIntoView({ behavior: 'smooth' });
+            if (type === 'sales' && document.getElementById('sales-lines').children.length === 0) window.addSalesLine();
+            if (type === 'sales-return' && document.getElementById('sales-return-lines').children.length === 0) window.addSalesReturnLine();
+            if (type === 'purchase' && document.getElementById('purchase-lines').children.length === 0) window.addPurchLine();
+            if (type === 'purchase-return' && document.getElementById('purchase-return-lines').children.length === 0) window.addPurchReturnLine();
         };
         window.hideForm = (type) => {
             document.getElementById(`form-${type}`).style.display = 'none';
@@ -393,15 +353,11 @@
 
         // ---- Account options helpers ----
         function accountOptions(filterFn) {
-            const accounts = filterFn ? glAccounts.filter(filterFn) : glAccounts;
-            return accounts.map(a => `<option value="${a.id}">${a.code} – ${a.name}</option>`).join('');
+            const accs = filterFn ? glAccounts.filter(filterFn) : glAccounts;
+            return accs.map(a => `<option value="${a.id}">${a.code} – ${a.name}</option>`).join('');
         }
-
-        const revenueOpts  = () => accountOptions(a => a.type === 'Revenue');
-        const expenseOpts  = () => accountOptions(a => a.type === 'Expense');
-        const assetOpts    = () => accountOptions(a => a.type === 'Asset');
-        const liabilityOpts = () => accountOptions(a => a.type === 'Liability');
-        const allOpts      = () => accountOptions();
+        const assetOpts = () => accountOptions(a => a.type === 'Asset');
+        const allOpts   = () => accountOptions();
 
         function populateSelect(id, optsHtml, prefix = '<option value="">Select account</option>') {
             const sel = document.getElementById(id);
@@ -411,220 +367,156 @@
             if (prev) sel.value = prev;
         }
 
-        // ---- VAT type → rate helper ----
-        function getVatRate(vatType) {
-            switch (vatType) {
-                case 'reduced':  return orgVatSettings.vatReducedRate;
-                case 'standard': return orgVatSettings.vatFullRate;
-                default: return 0; // exempt, zero
-            }
+        // ---- VAT rate helpers ----
+        function getVatRate(vatTreatment) {
+            if (vatTreatment === 'standard') return orgVatSettings.vatFullRate;
+            if (vatTreatment === 'reduced')  return orgVatSettings.vatReducedRate;
+            return 0;
+        }
+        function vatLabel(vt) {
+            if (vt === 'exempt') return 'Exempt';
+            if (vt === 'zero')   return '0%';
+            return `${getVatRate(vt)}%`;
         }
 
-        function getVatAccount(vatType) {
-            if (vatType === 'exempt') return null;
-            return orgVatSettings.defaultVatAccountId || null;
+        // ---- Product options ----
+        function productOpts() {
+            return ['<option value="">-- Custom / No product --</option>',
+                ...products.map(p => `<option value="${p.id}" data-sale="${p.defaultSalePrice}" data-purchase="${p.defaultPurchasePrice}" data-vat="${p.vatTreatment}" data-name="${escHtml(p.name)}">${escHtml(p.code ? p.code + ' – ' + p.name : p.name)}</option>`)
+            ].join('');
         }
 
-        // ---- VAT type change handlers ----
-        function onVatTypeChange(vatTypeId, vatRateDisplayId) {
-            const vatType = document.getElementById(vatTypeId).value;
-            const rate = getVatRate(vatType);
-            const rateDisplay = document.getElementById(vatRateDisplayId);
-            if (rateDisplay) rateDisplay.textContent = vatType === 'exempt' ? 'Exempt' : `${rate}%`;
+        // ---- Invoice line builder ----
+        function makeInvoiceLine(rowId, updateFn, priceField) {
+            return `<tr id="il-${rowId}">
+                <td><select onchange="onProductChange('il-${rowId}','${updateFn}','${priceField}')">${productOpts()}</select></td>
+                <td><input type="text" placeholder="Description" oninput="${updateFn}()"></td>
+                <td><input type="number" class="qty" step="0.01" value="1" min="0.01" oninput="${updateFn}()"></td>
+                <td><input type="number" class="price" step="0.01" value="0.00" min="0" oninput="${updateFn}()"></td>
+                <td>
+                    <select class="vat-sel" onchange="${updateFn}()">
+                        <option value="standard">Std (${orgVatSettings.vatFullRate}%)</option>
+                        <option value="reduced">Red (${orgVatSettings.vatReducedRate}%)</option>
+                        <option value="zero">Zero (0%)</option>
+                        <option value="exempt">Exempt</option>
+                    </select>
+                </td>
+                <td class="line-total" style="text-align:right;font-weight:500;">£0.00</td>
+                <td><button class="btn btn-sm btn-danger" onclick="document.getElementById('il-${rowId}').remove();${updateFn}()">✕</button></td>
+            </tr>`;
         }
 
-        // ---- Shared invoice line builder ----
-        function buildInvoiceLines(tbodyId, vatType) {
-            const vatRate = getVatRate(vatType);
+        window.onProductChange = (rowId, updateFn, priceField) => {
+            const row = document.getElementById(rowId);
+            if (!row) return;
+            const sel = row.querySelector('select');
+            const opt = sel.options[sel.selectedIndex];
+            const price = priceField === 'sale' ? parseFloat(opt.dataset.sale || 0) : parseFloat(opt.dataset.purchase || 0);
+            const vat   = opt.dataset.vat || 'standard';
+            const name  = opt.dataset.name || '';
+            row.querySelector('input[type=text]').value = name;
+            row.querySelector('.price').value = price.toFixed(2);
+            row.querySelector('.vat-sel').value = vat;
+            window[updateFn]();
+        };
+
+        function updateInvoiceTotal(tbodyId, totalId) {
+            let net = 0, vatTotal = 0;
+            document.querySelectorAll(`#${tbodyId} tr`).forEach(r => {
+                const qty   = parseFloat(r.querySelector('.qty')?.value || 0);
+                const price = parseFloat(r.querySelector('.price')?.value || 0);
+                const vt    = r.querySelector('.vat-sel')?.value || 'exempt';
+                const lineNet = Math.round(qty * price * 100) / 100;
+                const lineVat = (vt === 'exempt' || vt === 'zero') ? 0 : Math.round(lineNet * getVatRate(vt) / 100 * 100) / 100;
+                net += lineNet;
+                vatTotal += lineVat;
+                const cell = r.querySelector('.line-total');
+                if (cell) cell.textContent = UIUtils.formatCurrency(lineNet + lineVat);
+            });
+            const gross = net + vatTotal;
+            document.getElementById(totalId).textContent = vatTotal === 0
+                ? `Net: ${UIUtils.formatCurrency(net)} (no VAT)`
+                : `Net: ${UIUtils.formatCurrency(net)} + VAT: ${UIUtils.formatCurrency(vatTotal)} = Total: ${UIUtils.formatCurrency(gross)}`;
+        }
+
+        let salesCount = 0, srCount = 0, purchCount = 0, prCount = 0;
+        window.addSalesLine       = () => { const i = salesCount++; document.getElementById('sales-lines').insertAdjacentHTML('beforeend', makeInvoiceLine(i, 'updateSalesTotal', 'sale')); window.updateSalesTotal(); };
+        window.addSalesReturnLine = () => { const i = srCount++;    document.getElementById('sales-return-lines').insertAdjacentHTML('beforeend', makeInvoiceLine(`sr${i}`, 'updateSalesReturnTotal', 'sale')); window.updateSalesReturnTotal(); };
+        window.addPurchLine       = () => { const i = purchCount++; document.getElementById('purchase-lines').insertAdjacentHTML('beforeend', makeInvoiceLine(`p${i}`, 'updatePurchTotal', 'purchase')); window.updatePurchTotal(); };
+        window.addPurchReturnLine = () => { const i = prCount++;    document.getElementById('purchase-return-lines').insertAdjacentHTML('beforeend', makeInvoiceLine(`pr${i}`, 'updatePurchReturnTotal', 'purchase')); window.updatePurchReturnTotal(); };
+
+        window.updateSalesTotal       = () => updateInvoiceTotal('sales-lines',          'sales-total');
+        window.updateSalesReturnTotal = () => updateInvoiceTotal('sales-return-lines',   'sales-return-total');
+        window.updatePurchTotal       = () => updateInvoiceTotal('purchase-lines',       'purchase-total');
+        window.updatePurchReturnTotal = () => updateInvoiceTotal('purchase-return-lines','purchase-return-total');
+
+        function buildSimpleLines(tbodyId, priceField) {
             const lines = [];
             document.querySelectorAll(`#${tbodyId} tr`).forEach(r => {
-                const accountId = r.querySelector('select')?.value;
-                const desc = r.querySelectorAll('input[type=text]')[0]?.value || '';
-                const netAmount = parseFloat(r.querySelectorAll('input[type=number]')[0]?.value || 0);
-                if (accountId && netAmount > 0) {
-                    const vatAmount = vatType === 'exempt' ? 0 : Math.round(netAmount * vatRate / 100 * 100) / 100;
-                    const key = tbodyId.startsWith('sales') ? 'revenueAccountId' : 'expenseAccountId';
-                    lines.push({ [key]: accountId, description: desc, netAmount, vatAmount });
+                const productSel = r.querySelector('select');
+                const productId  = productSel?.value || null;
+                const desc  = r.querySelector('input[type=text]')?.value || '';
+                const qty   = parseFloat(r.querySelector('.qty')?.value || 0);
+                const price = parseFloat(r.querySelector('.price')?.value || 0);
+                const vt    = r.querySelector('.vat-sel')?.value || 'exempt';
+                if (qty > 0 && price > 0) {
+                    lines.push({ productId: productId || null, description: desc || null, quantity: qty, unitPrice: price, vatTreatment: vt });
                 }
             });
             return lines;
         }
 
-        function calcTotal(tbodyId, vatType) {
-            const vatRate = getVatRate(vatType);
-            let net = 0;
-            document.querySelectorAll(`#${tbodyId} tr`).forEach(r => {
-                net += parseFloat(r.querySelectorAll('input[type=number]')[0]?.value || 0);
-            });
-            const vat = vatType === 'exempt' ? 0 : Math.round(net * vatRate / 100 * 100) / 100;
-            return { net, vat, gross: net + vat };
-        }
-
-        // ============================================================
-        // SALES INVOICE & SALES RETURN
-        // ============================================================
-        let salesLineCount = 0;
-        let salesReturnLineCount = 0;
-
-        function makeSalesLineHtml(i, updateFn) {
-            return `<tr id="sl-${i}">
-                    <td><select onchange="${updateFn}()">${revenueOpts()}</select></td>
-                    <td><input type="text" placeholder="Line description"></td>
-                    <td><input type="number" step="0.01" value="0" oninput="${updateFn}()"></td>
-                    <td><button class="btn btn-sm btn-danger" onclick="document.getElementById('sl-${i}').remove(); ${updateFn}()">✕</button></td>
-                </tr>`;
-        }
-        function makeSalesReturnLineHtml(i, updateFn) {
-            return `<tr id="sl-${i}">
-                    <td><select onchange="${updateFn}()">${expenseOpts()}</select></td>
-                    <td><input type="text" placeholder="Line description"></td>
-                    <td><input type="number" step="0.01" value="0" oninput="${updateFn}()"></td>
-                    <td><button class="btn btn-sm btn-danger" onclick="document.getElementById('sl-${i}').remove(); ${updateFn}()">✕</button></td>
-                </tr>`;
-        }
-        window.addSalesLine = () => {
-            const i = `s${salesLineCount++}`;
-            document.getElementById('sales-lines').insertAdjacentHTML('beforeend', makeSalesLineHtml(i, 'updateSalesTotal'));
-        };
-        window.addSalesReturnLine = () => {
-            const i = `sr${salesReturnLineCount++}`;
-            document.getElementById('sales-return-lines').insertAdjacentHTML('beforeend', makeSalesReturnLineHtml(i, 'updateSalesReturnTotal'));
-        };
-
-        function updateSalesLike(prefix, tbodyId) {
-            const vt = document.getElementById(`${prefix}-vat-type`).value;
-            const { net, vat, gross } = calcTotal(tbodyId, vt);
-            document.getElementById(`${prefix}-total`).textContent =
-                vt === 'exempt' ? `Net: ${UIUtils.formatCurrency(net)} (VAT Exempt)`
-                : `Net: ${UIUtils.formatCurrency(net)} + VAT: ${UIUtils.formatCurrency(vat)} = ${UIUtils.formatCurrency(gross)}`;
-            document.getElementById(`${prefix}-vat-rate-label`).textContent = vt === 'exempt' ? 'Exempt' : `${getVatRate(vt)}%`;
-        }
-        window.updateSalesTotal = () => updateSalesLike('sales', 'sales-lines');
-        window.updateSalesReturnTotal = () => updateSalesLike('sales-return', 'sales-return-lines');
-
-        async function submitSalesLike(apiMethod, formPrefix) {
+        // ---- Submit simple invoice ----
+        window.submitSimple = async (formType) => {
             const orgId = ApiService.getSelectedOrg();
             if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
-            const customerId = document.getElementById(`${formPrefix}-customer`).value;
-            const date = document.getElementById(`${formPrefix}-date`).value;
-            if (!customerId || !date) { UIUtils.showAlert('Customer and date are required', 'error'); return; }
 
-            const vatType = document.getElementById(`${formPrefix}-vat-type`).value;
-            const lines = buildInvoiceLines(`${formPrefix}-lines`, vatType);
-            if (lines.length === 0) { UIUtils.showAlert('Add at least one line with an amount', 'error'); return; }
-
-            const hasVat = lines.some(l => l.vatAmount > 0);
-            const vatAccountId = hasVat ? getVatAccount(vatType) : null;
-            if (hasVat && !vatAccountId) {
-                UIUtils.showAlert('A default VAT account must be configured on the organisation for non-zero VAT. Go to Organisations → Edit to set it.', 'error');
+            const isSale = formType === 'sales' || formType === 'sales-return';
+            const entityId = isSale
+                ? document.getElementById(`${formType}-customer`)?.value
+                : document.getElementById(`${formType}-supplier`)?.value;
+            const date = document.getElementById(`${formType}-date`).value;
+            if (!entityId || !date) {
+                UIUtils.showAlert(`${isSale ? 'Customer' : 'Supplier'} and date are required`, 'error');
                 return;
             }
 
-            UIUtils.showLoading();
-            const response = await apiMethod(orgId, {
-                customerId,
+            const tbodyId = `${formType}-lines`;
+            const priceField = isSale ? 'sale' : 'purchase';
+            const lines = buildSimpleLines(tbodyId, priceField);
+            if (lines.length === 0) { UIUtils.showAlert('Add at least one line with qty and price', 'error'); return; }
+
+            const payload = {
                 entryDate: date,
-                referenceNumber: document.getElementById(`${formPrefix}-ref`).value || null,
-                description: document.getElementById(`${formPrefix}-desc`).value || null,
-                vatAccountId,
+                referenceNumber: document.getElementById(`${formType}-ref`)?.value || null,
+                description: document.getElementById(`${formType}-desc`)?.value || null,
+                ...(isSale ? { customerId: entityId } : { supplierId: entityId }),
                 lines
-            });
+            };
+
+            const apiMap = {
+                'sales':           ApiService.createSimpleSalesEntry.bind(ApiService),
+                'sales-return':    ApiService.createSimpleSalesReturnEntry.bind(ApiService),
+                'purchase':        ApiService.createSimplePurchaseEntry.bind(ApiService),
+                'purchase-return': ApiService.createSimplePurchaseReturnEntry.bind(ApiService),
+            };
+
+            UIUtils.showLoading();
+            const response = await apiMap[formType](orgId, payload);
             UIUtils.hideLoading();
+
             if (response.ok) {
-                const label = formPrefix === 'sales' ? 'Sales invoice' : 'Sales return';
-                UIUtils.showAlert(`${label} created`, 'success');
-                hideForm(formPrefix);
-                document.getElementById(`${formPrefix}-lines`).innerHTML = '';
-                if (formPrefix === 'sales') salesLineCount = 0; else salesReturnLineCount = 0;
+                const labels = { 'sales': 'Sales invoice', 'sales-return': 'Sales return', 'purchase': 'Purchase invoice', 'purchase-return': 'Purchase return' };
+                UIUtils.showAlert(`${labels[formType]} created`, 'success');
+                hideForm(formType);
+                document.getElementById(tbodyId).innerHTML = '';
                 loadEntries();
             } else {
                 UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
             }
-        }
-
-        window.submitSales = () => submitSalesLike(ApiService.createSalesDaybookEntry.bind(ApiService), 'sales');
-        window.submitSalesReturn = () => submitSalesLike(ApiService.createSalesReturnDaybookEntry.bind(ApiService), 'sales-return');
-
-        // ============================================================
-        // PURCHASE INVOICE & PURCHASE RETURN
-        // ============================================================
-        let purchLineCount = 0;
-        let purchReturnLineCount = 0;
-
-        function makePurchLineHtml(i, updateFn) {
-            return `<tr id="pl-${i}">
-                    <td><select onchange="${updateFn}()">${expenseOpts()}</select></td>
-                    <td><input type="text" placeholder="Line description"></td>
-                    <td><input type="number" step="0.01" value="0" oninput="${updateFn}()"></td>
-                    <td><button class="btn btn-sm btn-danger" onclick="document.getElementById('pl-${i}').remove(); ${updateFn}()">✕</button></td>
-                </tr>`;
-        }
-        window.addPurchLine = () => {
-            const i = `p${purchLineCount++}`;
-            document.getElementById('purchase-lines').insertAdjacentHTML('beforeend', makePurchLineHtml(i, 'updatePurchTotal'));
-        };
-        window.addPurchReturnLine = () => {
-            const i = `pr${purchReturnLineCount++}`;
-            document.getElementById('purchase-return-lines').insertAdjacentHTML('beforeend', makePurchLineHtml(i, 'updatePurchReturnTotal'));
         };
 
-        function updatePurchLike(prefix, tbodyId) {
-            const vt = document.getElementById(`${prefix}-vat-type`).value;
-            const { net, vat, gross } = calcTotal(tbodyId, vt);
-            document.getElementById(`${prefix}-total`).textContent =
-                vt === 'exempt' ? `Net: ${UIUtils.formatCurrency(net)} (VAT Exempt)`
-                : `Net: ${UIUtils.formatCurrency(net)} + VAT: ${UIUtils.formatCurrency(vat)} = ${UIUtils.formatCurrency(gross)}`;
-            document.getElementById(`${prefix}-vat-rate-label`).textContent = vt === 'exempt' ? 'Exempt' : `${getVatRate(vt)}%`;
-        }
-        window.updatePurchTotal = () => updatePurchLike('purchase', 'purchase-lines');
-        window.updatePurchReturnTotal = () => updatePurchLike('purchase-return', 'purchase-return-lines');
-
-        async function submitPurchaseLike(apiMethod, formPrefix) {
-            const orgId = ApiService.getSelectedOrg();
-            if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
-            const supplierId = document.getElementById(`${formPrefix}-supplier`).value;
-            const date = document.getElementById(`${formPrefix}-date`).value;
-            if (!supplierId || !date) { UIUtils.showAlert('Supplier and date are required', 'error'); return; }
-
-            const vatType = document.getElementById(`${formPrefix}-vat-type`).value;
-            const lines = buildInvoiceLines(`${formPrefix}-lines`, vatType);
-            if (lines.length === 0) { UIUtils.showAlert('Add at least one line with an amount', 'error'); return; }
-
-            const hasVat = lines.some(l => l.vatAmount > 0);
-            const vatAccountId = hasVat ? getVatAccount(vatType) : null;
-            if (hasVat && !vatAccountId) {
-                UIUtils.showAlert('A default VAT account must be configured on the organisation. Go to Organisations → Edit to set it.', 'error');
-                return;
-            }
-
-            UIUtils.showLoading();
-            const response = await apiMethod(orgId, {
-                supplierId,
-                entryDate: date,
-                referenceNumber: document.getElementById(`${formPrefix}-ref`).value || null,
-                description: document.getElementById(`${formPrefix}-desc`).value || null,
-                vatAccountId,
-                lines
-            });
-            UIUtils.hideLoading();
-            if (response.ok) {
-                const label = formPrefix === 'purchase' ? 'Purchase invoice' : 'Purchase return';
-                UIUtils.showAlert(`${label} created`, 'success');
-                hideForm(formPrefix);
-                document.getElementById(`${formPrefix}-lines`).innerHTML = '';
-                if (formPrefix === 'purchase') purchLineCount = 0; else purchReturnLineCount = 0;
-                loadEntries();
-            } else {
-                UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
-            }
-        }
-
-        window.submitPurchase = () => submitPurchaseLike(ApiService.createPurchaseDaybookEntry.bind(ApiService), 'purchase');
-        window.submitPurchaseReturn = () => submitPurchaseLike(ApiService.createPurchaseReturnDaybookEntry.bind(ApiService), 'purchase-return');
-
-        // ============================================================
-        // RECEIPT
-        // ============================================================
+        // ---- Receipt ----
         window.submitReceipt = async () => {
             const orgId = ApiService.getSelectedOrg();
             if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
@@ -646,9 +538,7 @@
             else UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
         };
 
-        // ============================================================
-        // PAYMENT
-        // ============================================================
+        // ---- Payment ----
         window.submitPayment = async () => {
             const orgId = ApiService.getSelectedOrg();
             if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
@@ -670,9 +560,7 @@
             else UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
         };
 
-        // ============================================================
-        // MANUAL JOURNAL
-        // ============================================================
+        // ---- Manual Journal ----
         let jnlLineCount = 0;
         window.addJournalLine = () => {
             const i = jnlLineCount++;
@@ -682,7 +570,7 @@
                     <td><input type="text" placeholder="Description"></td>
                     <td><input type="number" step="0.01" value="0" oninput="updateJournalTotal()"></td>
                     <td><input type="number" step="0.01" value="0" oninput="updateJournalTotal()"></td>
-                    <td><button class="btn btn-sm btn-danger" onclick="document.getElementById('jl-${i}').remove(); updateJournalTotal()">✕</button></td>
+                    <td><button class="btn btn-sm btn-danger" onclick="document.getElementById('jl-${i}').remove();updateJournalTotal()">✕</button></td>
                 </tr>`);
         };
         window.updateJournalTotal = () => {
@@ -696,13 +584,11 @@
             document.getElementById('jnl-total').textContent = `DR ${UIUtils.formatCurrency(dr)} / CR ${UIUtils.formatCurrency(cr)}${balanced ? ' ✓' : ' ⚠ Not balanced'}`;
             document.getElementById('jnl-total').style.color = balanced ? '' : 'var(--danger-color)';
         };
-
         window.submitJournal = async () => {
             const orgId = ApiService.getSelectedOrg();
             if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
             const date = document.getElementById('jnl-date').value;
             if (!date) { UIUtils.showAlert('Date is required', 'error'); return; }
-
             const lines = [];
             document.querySelectorAll('#jnl-lines tr').forEach(r => {
                 const accountId = r.querySelector('select')?.value;
@@ -711,44 +597,40 @@
                 const cr = parseFloat(r.querySelectorAll('input[type=number]')[1]?.value || 0);
                 if (accountId) lines.push({ glAccountId: accountId, narrationLine: desc, debitAmount: dr, creditAmount: cr });
             });
-
             const totalDr = lines.reduce((s, l) => s + l.debitAmount, 0);
             const totalCr = lines.reduce((s, l) => s + l.creditAmount, 0);
             if (Math.abs(totalDr - totalCr) > 0.01) { UIUtils.showAlert('Debits must equal Credits', 'error'); return; }
-
             UIUtils.showLoading();
             const response = await ApiService.createDaybookEntry(orgId, {
-                type: 'Journal',
-                entryDate: date,
+                type: 'Journal', entryDate: date,
                 referenceNumber: document.getElementById('jnl-ref').value || null,
                 description: document.getElementById('jnl-desc').value || null,
                 lines
             });
             UIUtils.hideLoading();
-            if (response.ok) {
-                UIUtils.showAlert('Journal entry created', 'success');
-                hideForm('journal');
-                document.getElementById('jnl-lines').innerHTML = '';
-                jnlLineCount = 0;
-                loadEntries();
-            } else {
-                UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
-            }
+            if (response.ok) { UIUtils.showAlert('Journal entry created', 'success'); hideForm('journal'); document.getElementById('jnl-lines').innerHTML = ''; jnlLineCount = 0; loadEntries(); }
+            else UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
         };
 
-        // ============================================================
-        // LOAD DATA
-        // ============================================================
+        // ---- Toggle journal detail row ----
+        window.toggleJournalLines = (row) => {
+            const detail = row.nextElementSibling;
+            if (detail && detail.classList.contains('journal-detail'))
+                detail.style.display = detail.style.display === 'none' ? '' : 'none';
+        };
+
+        // ---- Load data ----
         async function loadEntries() {
             const orgId = ApiService.getSelectedOrg();
             if (!orgId) return;
 
-            const [accountsRes, entriesRes, custRes, suppRes, orgRes] = await Promise.all([
+            const [accountsRes, entriesRes, custRes, suppRes, orgRes, prodRes] = await Promise.all([
                 ApiService.getGLAccounts(orgId),
                 ApiService.getDaybookEntries(orgId),
                 ApiService.getCustomers(orgId),
                 ApiService.getSuppliers(orgId),
                 ApiService.getOrganisation(orgId),
+                ApiService.getProducts(orgId),
             ]);
 
             if (orgRes.ok) {
@@ -757,39 +639,31 @@
                     vatReducedRate: orgRes.data.vatReducedRate ?? 5,
                     vatFullRate: orgRes.data.vatFullRate ?? 20,
                 };
-                // Update rate labels in all VAT type dropdowns
-                const rr = orgVatSettings.vatReducedRate;
-                const fr = orgVatSettings.vatFullRate;
-                ['sales', 'sales-return', 'purchase', 'purchase-return'].forEach(p => {
-                    const rl = document.getElementById(`${p}-reduced-rate-label`);
-                    const sl = document.getElementById(`${p}-standard-rate-label`);
-                    if (rl) rl.textContent = rr;
-                    if (sl) sl.textContent = fr;
-                });
             }
 
             if (accountsRes.ok) {
                 glAccounts = accountsRes.data;
-                // Bank/cash selects: Asset accounts
                 populateSelect('rcpt-bank', assetOpts());
                 populateSelect('rcpt-credit', allOpts());
                 populateSelect('pay-bank', assetOpts());
                 populateSelect('pay-debit', allOpts());
             }
 
+            if (prodRes.ok) products = prodRes.data;
+
             if (custRes.ok) {
                 customers = custRes.data;
                 const opts = customers.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
-                const prefix = '<option value="">Select customer</option>';
-                document.getElementById('sales-customer').innerHTML = prefix + opts;
-                document.getElementById('sales-return-customer').innerHTML = prefix + opts;
+                const pfx = '<option value="">Select customer</option>';
+                document.getElementById('sales-customer').innerHTML = pfx + opts;
+                document.getElementById('sales-return-customer').innerHTML = pfx + opts;
             }
             if (suppRes.ok) {
                 suppliers = suppRes.data;
                 const opts = suppliers.map(s => `<option value="${s.id}">${escHtml(s.name)}</option>`).join('');
-                const prefix = '<option value="">Select supplier</option>';
-                document.getElementById('purchase-supplier').innerHTML = prefix + opts;
-                document.getElementById('purchase-return-supplier').innerHTML = prefix + opts;
+                const pfx = '<option value="">Select supplier</option>';
+                document.getElementById('purchase-supplier').innerHTML = pfx + opts;
+                document.getElementById('purchase-return-supplier').innerHTML = pfx + opts;
             }
 
             if (!entriesRes.ok) return;
@@ -806,32 +680,41 @@
             };
             tbody.innerHTML = entries.map(entry => {
                 const totalDebit = entry.lines?.reduce((sum, l) => sum + l.debitAmount, 0) ?? 0;
-                const typeLabel = typeLabels[entry.type] || entry.type;
+                const typeLabel  = typeLabels[entry.type] || entry.type;
+                const entityName = entry.customerName || entry.supplierName || '';
+                const displayDesc = escHtml(entry.description || entityName || '-');
+                const subDesc = entry.description && entityName ? ` <span style="color:var(--secondary-color);font-size:12px;">(${escHtml(entityName)})</span>` : '';
+                const journalRows = (entry.lines || []).map(l => {
+                    const drCol = l.debitAmount  > 0 ? `<td style="text-align:right;color:#2e7d32;font-size:12px;">DR ${UIUtils.formatCurrency(l.debitAmount)}</td><td></td>` : `<td></td><td style="text-align:right;color:#c62828;font-size:12px;">CR ${UIUtils.formatCurrency(l.creditAmount)}</td>`;
+                    return `<tr><td style="padding-left:20px;font-size:12px;">↳ ${escHtml(l.glAccountName)}</td><td style="font-size:12px;color:var(--secondary-color);">${escHtml(l.narrationLine||'')}</td>${drCol}</tr>`;
+                }).join('');
+                const detailContent = entry.lines?.length
+                    ? `<table style="width:100%;border-collapse:collapse;background:#f8f9fa;border-top:1px solid var(--border-color);">${journalRows}</table>` : '';
                 return `
-                    <tr>
+                    <tr onclick="toggleJournalLines(this)" style="cursor:pointer;" title="Click to view journal entries">
                         <td>${UIUtils.formatDate(entry.entryDate)}</td>
                         <td>${typeLabel}</td>
                         <td>${escHtml(entry.referenceNumber || '-')}</td>
-                        <td>${escHtml(entry.description || (entry.customerName || entry.supplierName || '-'))}</td>
+                        <td>${displayDesc}${subDesc}</td>
                         <td>${UIUtils.formatCurrency(totalDebit)}</td>
                         <td>${entry.isPosted ? '<span style="color:var(--success-color);">✓ Posted</span>' : '<span style="color:var(--warning-color);">⏳ Draft</span>'}</td>
                         <td>
                             <div class="action-buttons">
-                                ${!entry.isPosted ? `<button class="btn btn-sm btn-success" onclick="postEntry('${entry.id}')">Post</button>` : ''}
-                                ${!entry.isPosted ? `<button class="btn btn-sm btn-danger" onclick="deleteEntry('${entry.id}')">Delete</button>` : ''}
+                                ${!entry.isPosted ? `<button class="btn btn-sm btn-success" onclick="event.stopPropagation();postEntry('${entry.id}')">Post</button>` : ''}
+                                ${!entry.isPosted ? `<button class="btn btn-sm btn-danger" onclick="event.stopPropagation();deleteEntry('${entry.id}')">Delete</button>` : ''}
                             </div>
                         </td>
-                    </tr>`;
+                    </tr>
+                    <tr class="journal-detail" style="display:none;"><td colspan="7" style="padding:0;">${detailContent}</td></tr>`;
             }).join('');
         }
 
         window.postEntry = async (entryId) => {
             const orgId = ApiService.getSelectedOrg();
             const response = await ApiService.postDaybookEntry(orgId, entryId);
-            if (response.ok) { UIUtils.showAlert('Entry posted', 'success'); loadEntries(); }
+            if (response.ok) { UIUtils.showAlert('Entry posted to GL', 'success'); loadEntries(); }
             else UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
         };
-
         window.deleteEntry = async (entryId) => {
             if (!confirm('Delete this entry?')) return;
             const orgId = ApiService.getSelectedOrg();
@@ -842,7 +725,6 @@
         document.getElementById('organisationSelect').addEventListener('change', (e) => {
             if (e.target.value) { ApiService.setSelectedOrg(e.target.value); loadEntries(); }
         });
-
         document.getElementById('logoutBtn').addEventListener('click', (e) => {
             e.preventDefault(); ApiService.logout(); window.location.href = 'login.html';
         });

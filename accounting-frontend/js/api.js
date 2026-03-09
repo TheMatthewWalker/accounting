@@ -250,6 +250,34 @@ class ApiService {
         );
     }
 
+    // Simplified daybook endpoints (no GL account selection required)
+    static async createSimpleSalesEntry(organisationId, entry) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/simple-sales`, 'POST', entry);
+    }
+    static async createSimpleSalesReturnEntry(organisationId, entry) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/simple-sales-returns`, 'POST', entry);
+    }
+    static async createSimplePurchaseEntry(organisationId, entry) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/simple-purchases`, 'POST', entry);
+    }
+    static async createSimplePurchaseReturnEntry(organisationId, entry) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/simple-purchase-returns`, 'POST', entry);
+    }
+
+    // Products & Services
+    static async getProducts(organisationId) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/products`);
+    }
+    static async createProduct(organisationId, product) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/products`, 'POST', product);
+    }
+    static async updateProduct(organisationId, productId, product) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/products/${productId}`, 'PUT', product);
+    }
+    static async deleteProduct(organisationId, productId) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/products/${productId}`, 'DELETE');
+    }
+
     // Report Endpoints
     static async getTrialBalance(organisationId, asOfDate = null) {
         let url = `${API_BASE_URL}/organisations/${organisationId}/reports/trial-balance`;

@@ -44,10 +44,10 @@ public class DaybookController : ControllerBase
         return CreatedAtAction(nameof(GetEntry), new { organisationId, entryId = result.Id }, result);
     }
 
-    // Sales return / credit note: CR Receivable / DR Revenue / DR VAT
+    // Sales return / credit note: CR Receivable / DR Sales Returns Expense / DR VAT
     [HttpPost("sales-returns")]
     [RequireOrganisationRole("Bookkeeper")]
-    public async Task<IActionResult> CreateSalesReturnEntry(Guid organisationId, [FromBody] CreateSalesDaybookRequest request)
+    public async Task<IActionResult> CreateSalesReturnEntry(Guid organisationId, [FromBody] CreateSalesReturnDaybookRequest request)
     {
         var result = await _service.CreateSalesReturnDaybookAsync(organisationId, request);
         return CreatedAtAction(nameof(GetEntry), new { organisationId, entryId = result.Id }, result);
@@ -77,6 +77,40 @@ public class DaybookController : ControllerBase
     public async Task<IActionResult> CreatePaymentEntry(Guid organisationId, [FromBody] CreatePaymentDaybookRequest request)
     {
         var result = await _service.CreatePaymentDaybookAsync(organisationId, request);
+        return CreatedAtAction(nameof(GetEntry), new { organisationId, entryId = result.Id }, result);
+    }
+
+    // ---- Simplified endpoints (GL accounts auto-resolved, product-based lines) ----
+
+    [HttpPost("simple-sales")]
+    [RequireOrganisationRole("Bookkeeper")]
+    public async Task<IActionResult> CreateSimpleSalesEntry(Guid organisationId, [FromBody] SimpleInvoiceRequest request)
+    {
+        var result = await _service.CreateSimpleSalesDaybookAsync(organisationId, request);
+        return CreatedAtAction(nameof(GetEntry), new { organisationId, entryId = result.Id }, result);
+    }
+
+    [HttpPost("simple-sales-returns")]
+    [RequireOrganisationRole("Bookkeeper")]
+    public async Task<IActionResult> CreateSimpleSalesReturnEntry(Guid organisationId, [FromBody] SimpleInvoiceRequest request)
+    {
+        var result = await _service.CreateSimpleSalesReturnDaybookAsync(organisationId, request);
+        return CreatedAtAction(nameof(GetEntry), new { organisationId, entryId = result.Id }, result);
+    }
+
+    [HttpPost("simple-purchases")]
+    [RequireOrganisationRole("Bookkeeper")]
+    public async Task<IActionResult> CreateSimplePurchaseEntry(Guid organisationId, [FromBody] SimpleInvoiceRequest request)
+    {
+        var result = await _service.CreateSimplePurchaseDaybookAsync(organisationId, request);
+        return CreatedAtAction(nameof(GetEntry), new { organisationId, entryId = result.Id }, result);
+    }
+
+    [HttpPost("simple-purchase-returns")]
+    [RequireOrganisationRole("Bookkeeper")]
+    public async Task<IActionResult> CreateSimplePurchaseReturnEntry(Guid organisationId, [FromBody] SimpleInvoiceRequest request)
+    {
+        var result = await _service.CreateSimplePurchaseReturnDaybookAsync(organisationId, request);
         return CreatedAtAction(nameof(GetEntry), new { organisationId, entryId = result.Id }, result);
     }
 
