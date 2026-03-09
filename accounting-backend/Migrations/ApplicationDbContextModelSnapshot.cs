@@ -501,11 +501,11 @@ namespace AccountingApp.Migrations
 
                     b.HasIndex("GoogleId")
                         .IsUnique()
-                        .HasFilter("GoogleId IS NOT NULL");
+                        .HasFilter("\"GoogleId\" IS NOT NULL");
 
                     b.HasIndex("MicrosoftId")
                         .IsUnique()
-                        .HasFilter("MicrosoftId IS NOT NULL");
+                        .HasFilter("\"MicrosoftId\" IS NOT NULL");
 
                     b.ToTable("Users");
                 });

@@ -406,14 +406,14 @@ namespace AccountingApp.Migrations
                 table: "Users",
                 column: "GoogleId",
                 unique: true,
-                filter: "GoogleId IS NOT NULL");
+                filter: "\"GoogleId\" IS NOT NULL");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_MicrosoftId",
                 table: "Users",
                 column: "MicrosoftId",
                 unique: true,
-                filter: "MicrosoftId IS NOT NULL");
+                filter: "\"MicrosoftId\" IS NOT NULL");
 
             migrationBuilder.AddForeignKey(
                 name: "FK_AccountBalances_GLAccounts_GLAccountId",

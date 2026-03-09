@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AccountingApp.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260309182525_InitialCreate")]
+    [Migration("20260309210537_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -504,11 +504,11 @@ namespace AccountingApp.Migrations
 
                     b.HasIndex("GoogleId")
                         .IsUnique()
-                        .HasFilter("GoogleId IS NOT NULL");
+                        .HasFilter("\"GoogleId\" IS NOT NULL");
 
                     b.HasIndex("MicrosoftId")
                         .IsUnique()
-                        .HasFilter("MicrosoftId IS NOT NULL");
+                        .HasFilter("\"MicrosoftId\" IS NOT NULL");
 
                     b.ToTable("Users");
                 });

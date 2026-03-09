@@ -28,8 +28,8 @@ public class ApplicationDbContext : DbContext
         // User configuration
         modelBuilder.Entity<User>().HasKey(u => u.Id);
         modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
-        modelBuilder.Entity<User>().HasIndex(u => u.GoogleId).IsUnique().HasFilter("GoogleId IS NOT NULL");
-        modelBuilder.Entity<User>().HasIndex(u => u.MicrosoftId).IsUnique().HasFilter("MicrosoftId IS NOT NULL");
+        modelBuilder.Entity<User>().HasIndex(u => u.GoogleId).IsUnique().HasFilter("\"GoogleId\" IS NOT NULL");
+        modelBuilder.Entity<User>().HasIndex(u => u.MicrosoftId).IsUnique().HasFilter("\"MicrosoftId\" IS NOT NULL");
 
         // Organisation configuration
         modelBuilder.Entity<Organisation>().HasKey(o => o.Id);
