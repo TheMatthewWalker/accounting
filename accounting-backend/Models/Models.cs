@@ -135,10 +135,14 @@ public class DaybookEntry
     public Guid? CustomerId { get; set; }
     public Guid? SupplierId { get; set; }
 
+    // Optional link to another daybook entry (e.g. receipt linked to a sales invoice)
+    public Guid? LinkedDaybookEntryId { get; set; }
+
     // Navigation properties
     public Organisation? Organisation { get; set; }
     public Customer? Customer { get; set; }
     public Supplier? Supplier { get; set; }
+    public DaybookEntry? LinkedDaybookEntry { get; set; }
     public ICollection<JournalEntry> JournalEntries { get; set; } = new List<JournalEntry>();
 }
 

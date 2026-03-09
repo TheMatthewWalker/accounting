@@ -5,6 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Customers - AccuBooks</title>
     <link rel="stylesheet" href="../css/style.css">
+    <!-- Export libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script src="../js/export.js"></script>
+    <style>
+        .ledger-panel {
+            margin-top: 30px;
+            background: var(--light-bg);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .ledger-panel h3 { margin-bottom: 5px; }
+        .ledger-panel .ledger-subtitle { color: var(--secondary-color); margin-bottom: 15px; font-size: 14px; }
+        .ledger-balance { font-weight: bold; font-size: 18px; margin-bottom: 15px; }
+        .type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .type-sales { background: #d4edda; color: #155724; }
+        .type-salesreturn { background: #f8d7da; color: #721c24; }
+        .type-receipt { background: #cce5ff; color: #004085; }
+        .linked-tag { font-size: 11px; color: var(--secondary-color); }
+        .record-receipt-form {
+            margin-top: 20px;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .record-receipt-form h4 { margin-bottom: 15px; }
+    </style>
 </head>
 <body>
     <div class="dashboard">
@@ -22,6 +57,7 @@
                 <li><a href="reports.html">📈 Reports</a></li>
                 <li><a href="customers.html" class="active">👥 Customers</a></li>
                 <li><a href="suppliers.html">🏢 Suppliers</a></li>
+                <li><a href="outstanding.html">⏳ Outstanding</a></li>
                 <li><a href="products.html">📦 Products &amp; Services</a></li>
                 <li><a href="organisations.html">🏭 Organisations</a></li>
                 <li><hr style="margin: 15px 0;"></li>
@@ -40,8 +76,10 @@
             </div>
 
             <div id="customerFormContainer" style="display: none; margin-bottom: 30px; background: var(--light-bg); padding: 20px; border-radius: 8px;">
-                <h3>New Customer</h3>
+                <h3 id="customerFormTitle">New Customer</h3>
                 <form id="customerForm">
+                    <input type="hidden" id="editingCustomerId">
+                    <input type="hidden" id="editingCustomerIsActive" value="true">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div class="form-group">
                             <label>Customer Name</label>
@@ -77,7 +115,7 @@
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-                        <button type="submit" class="btn btn-success">Create Customer</button>
+                        <button type="submit" class="btn btn-success" id="customerSubmitBtn">Create Customer</button>
                         <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
                     </div>
                 </form>
@@ -103,6 +141,86 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- Ledger Panel -->
+            <div id="ledgerPanel" style="display: none;" class="ledger-panel">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h3 id="ledgerTitle">Customer Ledger</h3>
+                        <p class="ledger-subtitle">All transactions for this customer</p>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-secondary btn-sm" id="ledgerExportPdf" style="display:none;" onclick="exportLedgerPDF()">⬇ PDF</button>
+                        <button class="btn btn-secondary btn-sm" id="ledgerExportXl" style="display:none;" onclick="exportLedgerExcel()">⬇ Excel</button>
+                        <button class="btn btn-secondary" onclick="closeLedger()">Close</button>
+                    </div>
+                </div>
+                <div class="ledger-balance" id="ledgerBalance"></div>
+
+                <div class="table-container" style="margin-bottom: 0;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Reference</th>
+                                <th>Description</th>
+                                <th>Debit (Invoice)</th>
+                                <th>Credit (Receipt)</th>
+                                <th>Balance</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledgerTable">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Record Receipt Form -->
+                <div id="receiptFormContainer" style="display: none;" class="record-receipt-form">
+                    <h4 id="receiptFormTitle">Record Receipt</h4>
+                    <form id="receiptForm">
+                        <input type="hidden" id="receiptLinkedEntryId">
+                        <input type="hidden" id="receiptCustomerId">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="form-group">
+                                <label>Receipt Date</label>
+                                <input type="date" id="receiptDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Reference</label>
+                                <input type="text" id="receiptReference" placeholder="e.g. CHQ-001">
+                            </div>
+                            <div class="form-group">
+                                <label>Amount</label>
+                                <input type="number" id="receiptAmount" step="0.01" min="0.01" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Description</label>
+                                <input type="text" id="receiptDescription" placeholder="Payment received">
+                            </div>
+                            <div class="form-group">
+                                <label>Bank / Cash Account (debit)</label>
+                                <select id="receiptBankAccount" required>
+                                    <option value="">Select account...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Accounts Receivable (credit)</label>
+                                <input type="hidden" id="receiptCreditAccountId">
+                                <div id="receiptCreditAccountDisplay" style="padding: 8px 12px; background: #f8f9fa; border: 1px solid var(--border-color); border-radius: 4px; color: var(--secondary-color); font-size: 14px;">
+                                    Loading...
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                            <button type="submit" class="btn btn-success">Record Receipt</button>
+                            <button type="button" class="btn btn-secondary" onclick="cancelReceipt()">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -111,6 +229,53 @@
 
         AuthGuard.init();
 
+        let currentLedger = null; // stores last-loaded ledger for export
+
+        window.exportLedgerPDF = () => {
+            if (!currentLedger) return;
+            const cols = ['Date', 'Type', 'Reference', 'Description', 'Debit', 'Credit', 'Balance', 'Status'];
+            const rows = currentLedger.lines.map(l => [
+                UIUtils.formatDate(l.date),
+                l.type === 'Sales' ? 'Invoice' : l.type === 'SalesReturn' ? 'Credit Note' : 'Receipt',
+                l.reference || '',
+                l.description || '',
+                l.debit > 0 ? UIUtils.formatCurrency(l.debit) : '',
+                l.credit > 0 ? UIUtils.formatCurrency(l.credit) : '',
+                UIUtils.formatCurrency(l.runningBalance),
+                l.isPosted ? 'Posted' : 'Draft'
+            ]);
+            const footer = [['', '', '', 'Closing Balance', '', '', UIUtils.formatCurrency(currentLedger.closingBalance), '']];
+            ExportUtils.toPDF(
+                `Customer Ledger: ${currentLedger.customerName}`,
+                `Outstanding Balance: ${UIUtils.formatCurrency(currentLedger.closingBalance)}`,
+                cols, rows,
+                `CustomerLedger_${currentLedger.customerName.replace(/\s+/g, '_')}`,
+                footer
+            );
+        };
+
+        window.exportLedgerExcel = () => {
+            if (!currentLedger) return;
+            const cols = ['Date', 'Type', 'Reference', 'Description', 'Debit', 'Credit', 'Balance', 'Status'];
+            const rows = currentLedger.lines.map(l => [
+                UIUtils.formatDate(l.date),
+                l.type === 'Sales' ? 'Invoice' : l.type === 'SalesReturn' ? 'Credit Note' : 'Receipt',
+                l.reference || '',
+                l.description || '',
+                l.debit > 0 ? UIUtils.formatCurrency(l.debit) : '',
+                l.credit > 0 ? UIUtils.formatCurrency(l.credit) : '',
+                UIUtils.formatCurrency(l.runningBalance),
+                l.isPosted ? 'Posted' : 'Draft'
+            ]);
+            const footer = [['', '', '', 'Closing Balance', '', '', UIUtils.formatCurrency(currentLedger.closingBalance), '']];
+            ExportUtils.toExcel(
+                `Ledger_${currentLedger.customerName}`,
+                cols, rows,
+                `CustomerLedger_${currentLedger.customerName.replace(/\s+/g, '_')}`,
+                footer
+            );
+        };
+
         const newCustomerBtn = document.getElementById('newCustomerBtn');
         const cancelBtn = document.getElementById('cancelBtn');
         const customerFormContainer = document.getElementById('customerFormContainer');
@@ -118,11 +283,16 @@
         const customersTable = document.getElementById('customersTable');
 
         newCustomerBtn.addEventListener('click', () => {
+            document.getElementById('editingCustomerId').value = '';
+            document.getElementById('customerFormTitle').textContent = 'New Customer';
+            document.getElementById('customerSubmitBtn').textContent = 'Create Customer';
+            customerForm.reset();
             customerFormContainer.style.display = 'block';
         });
 
         cancelBtn.addEventListener('click', () => {
             customerFormContainer.style.display = 'none';
+            document.getElementById('editingCustomerId').value = '';
             customerForm.reset();
         });
 
@@ -146,6 +316,7 @@
                             <td>${customer.isActive ? '<span style="color: var(--success-color);">✓ Active</span>' : '<span style="color: var(--danger-color);">✗ Inactive</span>'}</td>
                             <td>
                                 <div class="action-buttons">
+                                    <button class="btn btn-sm btn-info" onclick="viewLedger('${customer.id}', '${customer.name.replace(/'/g, "\\'")}')">Ledger</button>
                                     <button class="btn btn-sm btn-primary" onclick="editCustomer('${customer.id}')">Edit</button>
                                     <button class="btn btn-sm btn-danger" onclick="deleteCustomer('${customer.id}')">Delete</button>
                                 </div>
@@ -165,6 +336,7 @@
                 return;
             }
 
+            const editId = document.getElementById('editingCustomerId').value;
             const formData = new FormData(customerForm);
             const customerData = {
                 name: formData.get('name'),
@@ -174,25 +346,48 @@
                 city: formData.get('city'),
                 postalCode: formData.get('postalCode'),
                 country: formData.get('country'),
-                creditLimit: parseFloat(formData.get('creditLimit'))
+                creditLimit: parseFloat(formData.get('creditLimit')),
+                isActive: document.getElementById('editingCustomerIsActive').value !== 'false'
             };
 
             UIUtils.showLoading();
-            const response = await ApiService.createCustomer(orgId, customerData);
+            const response = editId
+                ? await ApiService.updateCustomer(orgId, editId, customerData)
+                : await ApiService.createCustomer(orgId, customerData);
             UIUtils.hideLoading();
 
             if (response.ok) {
-                UIUtils.showAlert('Customer created successfully!', 'success');
+                UIUtils.showAlert(editId ? 'Customer updated!' : 'Customer created!', 'success');
+                document.getElementById('editingCustomerId').value = '';
                 customerForm.reset();
                 customerFormContainer.style.display = 'none';
                 loadCustomers();
             } else {
-                UIUtils.showAlert('Error creating customer', 'error');
+                UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
             }
         });
 
-        window.editCustomer = (customerId) => {
-            UIUtils.showAlert('Edit functionality coming soon', 'info');
+        window.editCustomer = async (customerId) => {
+            const orgId = ApiService.getSelectedOrg();
+            UIUtils.showLoading();
+            const response = await ApiService.getCustomer(orgId, customerId);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert('Failed to load customer', 'error'); return; }
+            const c = response.data;
+            document.getElementById('editingCustomerId').value = c.id;
+            document.getElementById('editingCustomerIsActive').value = c.isActive ? 'true' : 'false';
+            document.getElementById('customerFormTitle').textContent = 'Edit Customer';
+            document.getElementById('customerSubmitBtn').textContent = 'Save Changes';
+            customerForm.querySelector('[name=name]').value = c.name || '';
+            customerForm.querySelector('[name=email]').value = c.email || '';
+            customerForm.querySelector('[name=phone]').value = c.phone || '';
+            customerForm.querySelector('[name=address]').value = c.address || '';
+            customerForm.querySelector('[name=city]').value = c.city || '';
+            customerForm.querySelector('[name=postalCode]').value = c.postalCode || '';
+            customerForm.querySelector('[name=country]').value = c.country || '';
+            customerForm.querySelector('[name=creditLimit]').value = c.creditLimit ?? 0;
+            customerFormContainer.style.display = 'block';
+            customerFormContainer.scrollIntoView({ behavior: 'smooth' });
         };
 
         window.deleteCustomer = async (customerId) => {
@@ -206,10 +401,152 @@
             }
         };
 
+        window.viewLedger = async (customerId, customerName) => {
+            const orgId = ApiService.getSelectedOrg();
+            UIUtils.showLoading();
+            const response = await ApiService.getCustomerLedger(orgId, customerId);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert('Failed to load ledger', 'error'); return; }
+
+            const ledger = response.data;
+            currentLedger = ledger;
+            document.getElementById('ledgerTitle').textContent = `Ledger: ${customerName}`;
+            document.getElementById('ledgerBalance').textContent = `Outstanding Balance: ${UIUtils.formatCurrency(ledger.closingBalance)}`;
+            document.getElementById('ledgerExportPdf').style.display = 'inline-block';
+            document.getElementById('ledgerExportXl').style.display = 'inline-block';
+
+            const tbody = document.getElementById('ledgerTable');
+            if (ledger.lines.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">No transactions</td></tr>';
+            } else {
+                tbody.innerHTML = ledger.lines.map(line => {
+                    const typeClass = line.type === 'Sales' ? 'type-sales'
+                        : line.type === 'SalesReturn' ? 'type-salesreturn'
+                        : 'type-receipt';
+                    const typeLabel = line.type === 'Sales' ? 'Invoice'
+                        : line.type === 'SalesReturn' ? 'Credit Note'
+                        : line.type === 'Receipt' ? 'Receipt'
+                        : line.type;
+                    const debit = line.debit > 0 ? UIUtils.formatCurrency(line.debit) : '';
+                    const credit = line.credit > 0 ? UIUtils.formatCurrency(line.credit) : '';
+                    const linkedTag = line.linkedEntryId
+                        ? `<br><span class="linked-tag">Linked: ${line.linkedReference || line.linkedEntryId.substring(0, 8)}</span>`
+                        : '';
+                    const status = line.isPosted
+                        ? '<span style="color: var(--success-color); font-size:12px;">Posted</span>'
+                        : '<span style="color: var(--secondary-color); font-size:12px;">Draft</span>';
+
+                    // Show "Record Receipt" only for Sales invoices that aren't fully settled
+                    const canRecord = (line.type === 'Sales') && line.debit > 0;
+                    const actionBtn = canRecord
+                        ? `<button class="btn btn-sm btn-success" onclick="openReceiptForm('${line.entryId}', '${customerId}', ${line.debit}, '${line.reference || ''}')">Record Receipt</button>`
+                        : '';
+
+                    return `<tr>
+                        <td>${UIUtils.formatDate(line.date)}</td>
+                        <td><span class="type-badge ${typeClass}">${typeLabel}</span></td>
+                        <td>${line.reference || '-'}${linkedTag}</td>
+                        <td>${line.description || '-'}</td>
+                        <td style="text-align:right;">${debit}</td>
+                        <td style="text-align:right;">${credit}</td>
+                        <td style="text-align:right; font-weight:bold;">${UIUtils.formatCurrency(line.runningBalance)}</td>
+                        <td>${status}</td>
+                        <td>${actionBtn}</td>
+                    </tr>`;
+                }).join('');
+            }
+
+            document.getElementById('receiptFormContainer').style.display = 'none';
+            document.getElementById('ledgerPanel').style.display = 'block';
+            document.getElementById('ledgerPanel').scrollIntoView({ behavior: 'smooth' });
+        };
+
+        window.closeLedger = () => {
+            document.getElementById('ledgerPanel').style.display = 'none';
+            document.getElementById('receiptFormContainer').style.display = 'none';
+        };
+
+        window.openReceiptForm = async (invoiceEntryId, customerId, invoiceAmount, invoiceRef) => {
+            const orgId = ApiService.getSelectedOrg();
+            document.getElementById('receiptLinkedEntryId').value = invoiceEntryId;
+            document.getElementById('receiptCustomerId').value = customerId;
+            document.getElementById('receiptAmount').value = invoiceAmount.toFixed(2);
+            document.getElementById('receiptDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('receiptDescription').value = invoiceRef ? `Receipt for invoice ${invoiceRef}` : 'Receipt';
+            document.getElementById('receiptReference').value = '';
+            document.getElementById('receiptFormTitle').textContent = invoiceRef
+                ? `Record Receipt for Invoice ${invoiceRef}`
+                : 'Record Receipt';
+
+            // Load GL accounts for bank dropdown and AR account (fixed)
+            const acctResp = await ApiService.getGLAccounts(orgId);
+            if (acctResp.ok) {
+                const accounts = acctResp.data.filter(a => a.isActive);
+                // Bank/cash: Asset accounts only
+                const bankAccounts = accounts.filter(a => a.type === 'Asset');
+                const bankSel = document.getElementById('receiptBankAccount');
+                bankSel.innerHTML = '<option value="">Select bank/cash account...</option>'
+                    + bankAccounts.map(a => `<option value="${a.id}">${a.code} - ${a.name}</option>`).join('');
+
+                // AR account: find Trade Receivables (Asset, name contains Receivable)
+                const arAccount = accounts.find(a => a.type === 'Asset' && /receivable/i.test(a.name));
+                const display = document.getElementById('receiptCreditAccountDisplay');
+                const hidden = document.getElementById('receiptCreditAccountId');
+                if (arAccount) {
+                    hidden.value = arAccount.id;
+                    display.textContent = `${arAccount.code} - ${arAccount.name}`;
+                } else {
+                    hidden.value = '';
+                    display.textContent = 'No receivables account found — check your chart of accounts';
+                    display.style.color = 'var(--danger-color)';
+                }
+            }
+
+            document.getElementById('receiptFormContainer').style.display = 'block';
+            document.getElementById('receiptFormContainer').scrollIntoView({ behavior: 'smooth' });
+        };
+
+        window.cancelReceipt = () => {
+            document.getElementById('receiptFormContainer').style.display = 'none';
+        };
+
+        document.getElementById('receiptForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const orgId = ApiService.getSelectedOrg();
+
+            const receiptData = {
+                entryDate: document.getElementById('receiptDate').value,
+                referenceNumber: document.getElementById('receiptReference').value || null,
+                description: document.getElementById('receiptDescription').value,
+                customerId: document.getElementById('receiptCustomerId').value || null,
+                bankAccountId: document.getElementById('receiptBankAccount').value,
+                creditAccountId: document.getElementById('receiptCreditAccountId').value,
+                amount: parseFloat(document.getElementById('receiptAmount').value),
+                linkedDaybookEntryId: document.getElementById('receiptLinkedEntryId').value || null
+            };
+
+            UIUtils.showLoading();
+            const response = await ApiService.createReceiptDaybookEntry(orgId, receiptData);
+            UIUtils.hideLoading();
+
+            if (response.ok) {
+                UIUtils.showAlert('Receipt recorded!', 'success');
+                document.getElementById('receiptFormContainer').style.display = 'none';
+                // Reload the ledger for the current customer
+                const cid = document.getElementById('receiptCustomerId').value;
+                const ledgerTitle = document.getElementById('ledgerTitle').textContent.replace('Ledger: ', '');
+                viewLedger(cid, ledgerTitle);
+                loadCustomers();
+            } else {
+                UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
+            }
+        });
+
         document.getElementById('organisationSelect').addEventListener('change', (e) => {
             if (e.target.value) {
                 ApiService.setSelectedOrg(e.target.value);
                 loadCustomers();
+                document.getElementById('ledgerPanel').style.display = 'none';
             }
         });
 

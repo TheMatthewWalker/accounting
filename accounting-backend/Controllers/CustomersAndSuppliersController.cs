@@ -56,6 +56,22 @@ public class CustomersController : ControllerBase
         await _service.DeleteCustomerAsync(customerId);
         return NoContent();
     }
+
+    [HttpGet("{customerId}/ledger")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetCustomerLedger(Guid organisationId, Guid customerId)
+    {
+        var result = await _service.GetCustomerLedgerAsync(organisationId, customerId);
+        return Ok(result);
+    }
+
+    [HttpGet("outstanding")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetOutstandingInvoices(Guid organisationId)
+    {
+        var result = await _service.GetOutstandingInvoicesAsync(organisationId);
+        return Ok(result);
+    }
 }
 
 [Authorize]
@@ -108,5 +124,21 @@ public class SuppliersController : ControllerBase
     {
         await _service.DeleteSupplierAsync(supplierId);
         return NoContent();
+    }
+
+    [HttpGet("{supplierId}/ledger")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetSupplierLedger(Guid organisationId, Guid supplierId)
+    {
+        var result = await _service.GetSupplierLedgerAsync(organisationId, supplierId);
+        return Ok(result);
+    }
+
+    [HttpGet("outstanding")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetOutstandingBills(Guid organisationId)
+    {
+        var result = await _service.GetOutstandingBillsAsync(organisationId);
+        return Ok(result);
     }
 }

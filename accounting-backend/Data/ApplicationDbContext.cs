@@ -92,6 +92,11 @@ public class ApplicationDbContext : DbContext
             .WithMany()
             .HasForeignKey(de => de.SupplierId)
             .OnDelete(DeleteBehavior.SetNull);
+        modelBuilder.Entity<DaybookEntry>()
+            .HasOne(de => de.LinkedDaybookEntry)
+            .WithMany()
+            .HasForeignKey(de => de.LinkedDaybookEntryId)
+            .OnDelete(DeleteBehavior.NoAction);
 
         // JournalEntry configuration
         modelBuilder.Entity<JournalEntry>().HasKey(je => je.Id);

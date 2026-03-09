@@ -5,6 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Suppliers - AccuBooks</title>
     <link rel="stylesheet" href="../css/style.css">
+    <!-- Export libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <script src="../js/export.js"></script>
+    <style>
+        .ledger-panel {
+            margin-top: 30px;
+            background: var(--light-bg);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .ledger-panel h3 { margin-bottom: 5px; }
+        .ledger-panel .ledger-subtitle { color: var(--secondary-color); margin-bottom: 15px; font-size: 14px; }
+        .ledger-balance { font-weight: bold; font-size: 18px; margin-bottom: 15px; }
+        .type-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .type-purchase { background: #fff3cd; color: #856404; }
+        .type-purchasereturn { background: #d4edda; color: #155724; }
+        .type-payment { background: #cce5ff; color: #004085; }
+        .linked-tag { font-size: 11px; color: var(--secondary-color); }
+        .record-payment-form {
+            margin-top: 20px;
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .record-payment-form h4 { margin-bottom: 15px; }
+    </style>
 </head>
 <body>
     <div class="dashboard">
@@ -22,6 +57,7 @@
                 <li><a href="reports.html">📈 Reports</a></li>
                 <li><a href="customers.html">👥 Customers</a></li>
                 <li><a href="suppliers.html" class="active">🏢 Suppliers</a></li>
+                <li><a href="outstanding.html">⏳ Outstanding</a></li>
                 <li><a href="products.html">📦 Products &amp; Services</a></li>
                 <li><a href="organisations.html">🏭 Organisations</a></li>
                 <li><hr style="margin: 15px 0;"></li>
@@ -40,8 +76,10 @@
             </div>
 
             <div id="supplierFormContainer" style="display: none; margin-bottom: 30px; background: var(--light-bg); padding: 20px; border-radius: 8px;">
-                <h3>New Supplier</h3>
+                <h3 id="supplierFormTitle">New Supplier</h3>
                 <form id="supplierForm">
+                    <input type="hidden" id="editingSupplierId">
+                    <input type="hidden" id="editingSupplierIsActive" value="true">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
                         <div class="form-group">
                             <label>Supplier Name</label>
@@ -77,7 +115,7 @@
                         </div>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
-                        <button type="submit" class="btn btn-success">Create Supplier</button>
+                        <button type="submit" class="btn btn-success" id="supplierSubmitBtn">Create Supplier</button>
                         <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
                     </div>
                 </form>
@@ -103,6 +141,86 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- Ledger Panel -->
+            <div id="ledgerPanel" style="display: none;" class="ledger-panel">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <h3 id="ledgerTitle">Supplier Ledger</h3>
+                        <p class="ledger-subtitle">All transactions for this supplier</p>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button class="btn btn-secondary btn-sm" id="ledgerExportPdf" style="display:none;" onclick="exportLedgerPDF()">⬇ PDF</button>
+                        <button class="btn btn-secondary btn-sm" id="ledgerExportXl" style="display:none;" onclick="exportLedgerExcel()">⬇ Excel</button>
+                        <button class="btn btn-secondary" onclick="closeLedger()">Close</button>
+                    </div>
+                </div>
+                <div class="ledger-balance" id="ledgerBalance"></div>
+
+                <div class="table-container" style="margin-bottom: 0;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Reference</th>
+                                <th>Description</th>
+                                <th>Debit (Payment)</th>
+                                <th>Credit (Invoice)</th>
+                                <th>Balance</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ledgerTable">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Record Payment Form -->
+                <div id="paymentFormContainer" style="display: none;" class="record-payment-form">
+                    <h4 id="paymentFormTitle">Record Payment</h4>
+                    <form id="paymentForm">
+                        <input type="hidden" id="paymentLinkedEntryId">
+                        <input type="hidden" id="paymentSupplierId">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                            <div class="form-group">
+                                <label>Payment Date</label>
+                                <input type="date" id="paymentDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Reference</label>
+                                <input type="text" id="paymentReference" placeholder="e.g. BAC-001">
+                            </div>
+                            <div class="form-group">
+                                <label>Amount</label>
+                                <input type="number" id="paymentAmount" step="0.01" min="0.01" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Description</label>
+                                <input type="text" id="paymentDescription" placeholder="Payment to supplier">
+                            </div>
+                            <div class="form-group">
+                                <label>Accounts Payable (debit)</label>
+                                <input type="hidden" id="paymentDebitAccountId">
+                                <div id="paymentDebitAccountDisplay" style="padding: 8px 12px; background: #f8f9fa; border: 1px solid var(--border-color); border-radius: 4px; color: var(--secondary-color); font-size: 14px;">
+                                    Loading...
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label>Bank / Cash Account (credit)</label>
+                                <select id="paymentBankAccount" required>
+                                    <option value="">Select account...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                            <button type="submit" class="btn btn-success">Record Payment</button>
+                            <button type="button" class="btn btn-secondary" onclick="cancelPayment()">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </main>
     </div>
 
@@ -111,6 +229,53 @@
 
         AuthGuard.init();
 
+        let currentLedger = null;
+
+        window.exportLedgerPDF = () => {
+            if (!currentLedger) return;
+            const cols = ['Date', 'Type', 'Reference', 'Description', 'Debit', 'Credit', 'Balance', 'Status'];
+            const rows = currentLedger.lines.map(l => [
+                UIUtils.formatDate(l.date),
+                l.type === 'Purchase' ? 'Invoice' : l.type === 'PurchaseReturn' ? 'Debit Note' : 'Payment',
+                l.reference || '',
+                l.description || '',
+                l.debit > 0 ? UIUtils.formatCurrency(l.debit) : '',
+                l.credit > 0 ? UIUtils.formatCurrency(l.credit) : '',
+                UIUtils.formatCurrency(l.runningBalance),
+                l.isPosted ? 'Posted' : 'Draft'
+            ]);
+            const footer = [['', '', '', 'Closing Balance', '', '', UIUtils.formatCurrency(currentLedger.closingBalance), '']];
+            ExportUtils.toPDF(
+                `Supplier Ledger: ${currentLedger.supplierName}`,
+                `Outstanding Balance: ${UIUtils.formatCurrency(currentLedger.closingBalance)}`,
+                cols, rows,
+                `SupplierLedger_${currentLedger.supplierName.replace(/\s+/g, '_')}`,
+                footer
+            );
+        };
+
+        window.exportLedgerExcel = () => {
+            if (!currentLedger) return;
+            const cols = ['Date', 'Type', 'Reference', 'Description', 'Debit', 'Credit', 'Balance', 'Status'];
+            const rows = currentLedger.lines.map(l => [
+                UIUtils.formatDate(l.date),
+                l.type === 'Purchase' ? 'Invoice' : l.type === 'PurchaseReturn' ? 'Debit Note' : 'Payment',
+                l.reference || '',
+                l.description || '',
+                l.debit > 0 ? UIUtils.formatCurrency(l.debit) : '',
+                l.credit > 0 ? UIUtils.formatCurrency(l.credit) : '',
+                UIUtils.formatCurrency(l.runningBalance),
+                l.isPosted ? 'Posted' : 'Draft'
+            ]);
+            const footer = [['', '', '', 'Closing Balance', '', '', UIUtils.formatCurrency(currentLedger.closingBalance), '']];
+            ExportUtils.toExcel(
+                `Ledger_${currentLedger.supplierName}`,
+                cols, rows,
+                `SupplierLedger_${currentLedger.supplierName.replace(/\s+/g, '_')}`,
+                footer
+            );
+        };
+
         const newSupplierBtn = document.getElementById('newSupplierBtn');
         const cancelBtn = document.getElementById('cancelBtn');
         const supplierFormContainer = document.getElementById('supplierFormContainer');
@@ -118,11 +283,16 @@
         const suppliersTable = document.getElementById('suppliersTable');
 
         newSupplierBtn.addEventListener('click', () => {
+            document.getElementById('editingSupplierId').value = '';
+            document.getElementById('supplierFormTitle').textContent = 'New Supplier';
+            document.getElementById('supplierSubmitBtn').textContent = 'Create Supplier';
+            supplierForm.reset();
             supplierFormContainer.style.display = 'block';
         });
 
         cancelBtn.addEventListener('click', () => {
             supplierFormContainer.style.display = 'none';
+            document.getElementById('editingSupplierId').value = '';
             supplierForm.reset();
         });
 
@@ -146,6 +316,7 @@
                             <td>${supplier.isActive ? '<span style="color: var(--success-color);">✓ Active</span>' : '<span style="color: var(--danger-color);">✗ Inactive</span>'}</td>
                             <td>
                                 <div class="action-buttons">
+                                    <button class="btn btn-sm btn-info" onclick="viewLedger('${supplier.id}', '${supplier.name.replace(/'/g, "\\'")}')">Ledger</button>
                                     <button class="btn btn-sm btn-primary" onclick="editSupplier('${supplier.id}')">Edit</button>
                                     <button class="btn btn-sm btn-danger" onclick="deleteSupplier('${supplier.id}')">Delete</button>
                                 </div>
@@ -165,6 +336,7 @@
                 return;
             }
 
+            const editId = document.getElementById('editingSupplierId').value;
             const formData = new FormData(supplierForm);
             const supplierData = {
                 name: formData.get('name'),
@@ -174,25 +346,48 @@
                 city: formData.get('city'),
                 postalCode: formData.get('postalCode'),
                 country: formData.get('country'),
-                creditLimit: parseFloat(formData.get('creditLimit'))
+                creditLimit: parseFloat(formData.get('creditLimit')),
+                isActive: document.getElementById('editingSupplierIsActive').value !== 'false'
             };
 
             UIUtils.showLoading();
-            const response = await ApiService.createSupplier(orgId, supplierData);
+            const response = editId
+                ? await ApiService.updateSupplier(orgId, editId, supplierData)
+                : await ApiService.createSupplier(orgId, supplierData);
             UIUtils.hideLoading();
 
             if (response.ok) {
-                UIUtils.showAlert('Supplier created successfully!', 'success');
+                UIUtils.showAlert(editId ? 'Supplier updated!' : 'Supplier created!', 'success');
+                document.getElementById('editingSupplierId').value = '';
                 supplierForm.reset();
                 supplierFormContainer.style.display = 'none';
                 loadSuppliers();
             } else {
-                UIUtils.showAlert('Error creating supplier', 'error');
+                UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
             }
         });
 
-        window.editSupplier = (supplierId) => {
-            UIUtils.showAlert('Edit functionality coming soon', 'info');
+        window.editSupplier = async (supplierId) => {
+            const orgId = ApiService.getSelectedOrg();
+            UIUtils.showLoading();
+            const response = await ApiService.getSupplier(orgId, supplierId);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert('Failed to load supplier', 'error'); return; }
+            const s = response.data;
+            document.getElementById('editingSupplierId').value = s.id;
+            document.getElementById('editingSupplierIsActive').value = s.isActive ? 'true' : 'false';
+            document.getElementById('supplierFormTitle').textContent = 'Edit Supplier';
+            document.getElementById('supplierSubmitBtn').textContent = 'Save Changes';
+            supplierForm.querySelector('[name=name]').value = s.name || '';
+            supplierForm.querySelector('[name=email]').value = s.email || '';
+            supplierForm.querySelector('[name=phone]').value = s.phone || '';
+            supplierForm.querySelector('[name=address]').value = s.address || '';
+            supplierForm.querySelector('[name=city]').value = s.city || '';
+            supplierForm.querySelector('[name=postalCode]').value = s.postalCode || '';
+            supplierForm.querySelector('[name=country]').value = s.country || '';
+            supplierForm.querySelector('[name=creditLimit]').value = s.creditLimit ?? 0;
+            supplierFormContainer.style.display = 'block';
+            supplierFormContainer.scrollIntoView({ behavior: 'smooth' });
         };
 
         window.deleteSupplier = async (supplierId) => {
@@ -206,10 +401,151 @@
             }
         };
 
+        window.viewLedger = async (supplierId, supplierName) => {
+            const orgId = ApiService.getSelectedOrg();
+            UIUtils.showLoading();
+            const response = await ApiService.getSupplierLedger(orgId, supplierId);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert('Failed to load ledger', 'error'); return; }
+
+            const ledger = response.data;
+            currentLedger = ledger;
+            document.getElementById('ledgerTitle').textContent = `Ledger: ${supplierName}`;
+            document.getElementById('ledgerBalance').textContent = `Outstanding Balance: ${UIUtils.formatCurrency(ledger.closingBalance)}`;
+            document.getElementById('ledgerExportPdf').style.display = 'inline-block';
+            document.getElementById('ledgerExportXl').style.display = 'inline-block';
+
+            const tbody = document.getElementById('ledgerTable');
+            if (ledger.lines.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;">No transactions</td></tr>';
+            } else {
+                tbody.innerHTML = ledger.lines.map(line => {
+                    const typeClass = line.type === 'Purchase' ? 'type-purchase'
+                        : line.type === 'PurchaseReturn' ? 'type-purchasereturn'
+                        : 'type-payment';
+                    const typeLabel = line.type === 'Purchase' ? 'Invoice'
+                        : line.type === 'PurchaseReturn' ? 'Debit Note'
+                        : line.type === 'Payment' ? 'Payment'
+                        : line.type;
+                    const debit = line.debit > 0 ? UIUtils.formatCurrency(line.debit) : '';
+                    const credit = line.credit > 0 ? UIUtils.formatCurrency(line.credit) : '';
+                    const linkedTag = line.linkedEntryId
+                        ? `<br><span class="linked-tag">Linked: ${line.linkedReference || line.linkedEntryId.substring(0, 8)}</span>`
+                        : '';
+                    const status = line.isPosted
+                        ? '<span style="color: var(--success-color); font-size:12px;">Posted</span>'
+                        : '<span style="color: var(--secondary-color); font-size:12px;">Draft</span>';
+
+                    // Show "Record Payment" only for Purchase invoices
+                    const canRecord = (line.type === 'Purchase') && line.credit > 0;
+                    const actionBtn = canRecord
+                        ? `<button class="btn btn-sm btn-success" onclick="openPaymentForm('${line.entryId}', '${supplierId}', ${line.credit}, '${line.reference || ''}')">Record Payment</button>`
+                        : '';
+
+                    return `<tr>
+                        <td>${UIUtils.formatDate(line.date)}</td>
+                        <td><span class="type-badge ${typeClass}">${typeLabel}</span></td>
+                        <td>${line.reference || '-'}${linkedTag}</td>
+                        <td>${line.description || '-'}</td>
+                        <td style="text-align:right;">${debit}</td>
+                        <td style="text-align:right;">${credit}</td>
+                        <td style="text-align:right; font-weight:bold;">${UIUtils.formatCurrency(line.runningBalance)}</td>
+                        <td>${status}</td>
+                        <td>${actionBtn}</td>
+                    </tr>`;
+                }).join('');
+            }
+
+            document.getElementById('paymentFormContainer').style.display = 'none';
+            document.getElementById('ledgerPanel').style.display = 'block';
+            document.getElementById('ledgerPanel').scrollIntoView({ behavior: 'smooth' });
+        };
+
+        window.closeLedger = () => {
+            document.getElementById('ledgerPanel').style.display = 'none';
+            document.getElementById('paymentFormContainer').style.display = 'none';
+        };
+
+        window.openPaymentForm = async (invoiceEntryId, supplierId, invoiceAmount, invoiceRef) => {
+            const orgId = ApiService.getSelectedOrg();
+            document.getElementById('paymentLinkedEntryId').value = invoiceEntryId;
+            document.getElementById('paymentSupplierId').value = supplierId;
+            document.getElementById('paymentAmount').value = invoiceAmount.toFixed(2);
+            document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('paymentDescription').value = invoiceRef ? `Payment for invoice ${invoiceRef}` : 'Payment';
+            document.getElementById('paymentReference').value = '';
+            document.getElementById('paymentFormTitle').textContent = invoiceRef
+                ? `Record Payment for Invoice ${invoiceRef}`
+                : 'Record Payment';
+
+            // Load GL accounts: AP account (fixed) and bank/cash dropdown
+            const acctResp = await ApiService.getGLAccounts(orgId);
+            if (acctResp.ok) {
+                const accounts = acctResp.data.filter(a => a.isActive);
+                // Bank/cash: Asset accounts only
+                const bankSel = document.getElementById('paymentBankAccount');
+                bankSel.innerHTML = '<option value="">Select bank/cash account...</option>'
+                    + accounts.filter(a => a.type === 'Asset')
+                        .map(a => `<option value="${a.id}">${a.code} - ${a.name}</option>`).join('');
+
+                // AP account: find Trade Payables (Liability, name contains Payable)
+                const apAccount = accounts.find(a => a.type === 'Liability' && /payable/i.test(a.name));
+                const display = document.getElementById('paymentDebitAccountDisplay');
+                const hidden = document.getElementById('paymentDebitAccountId');
+                if (apAccount) {
+                    hidden.value = apAccount.id;
+                    display.textContent = `${apAccount.code} - ${apAccount.name}`;
+                } else {
+                    hidden.value = '';
+                    display.textContent = 'No payables account found — check your chart of accounts';
+                    display.style.color = 'var(--danger-color)';
+                }
+            }
+
+            document.getElementById('paymentFormContainer').style.display = 'block';
+            document.getElementById('paymentFormContainer').scrollIntoView({ behavior: 'smooth' });
+        };
+
+        window.cancelPayment = () => {
+            document.getElementById('paymentFormContainer').style.display = 'none';
+        };
+
+        document.getElementById('paymentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const orgId = ApiService.getSelectedOrg();
+
+            const paymentData = {
+                entryDate: document.getElementById('paymentDate').value,
+                referenceNumber: document.getElementById('paymentReference').value || null,
+                description: document.getElementById('paymentDescription').value,
+                supplierId: document.getElementById('paymentSupplierId').value || null,
+                debitAccountId: document.getElementById('paymentDebitAccountId').value,
+                bankAccountId: document.getElementById('paymentBankAccount').value,
+                amount: parseFloat(document.getElementById('paymentAmount').value),
+                linkedDaybookEntryId: document.getElementById('paymentLinkedEntryId').value || null
+            };
+
+            UIUtils.showLoading();
+            const response = await ApiService.createPaymentDaybookEntry(orgId, paymentData);
+            UIUtils.hideLoading();
+
+            if (response.ok) {
+                UIUtils.showAlert('Payment recorded!', 'success');
+                document.getElementById('paymentFormContainer').style.display = 'none';
+                const sid = document.getElementById('paymentSupplierId').value;
+                const ledgerTitle = document.getElementById('ledgerTitle').textContent.replace('Ledger: ', '');
+                viewLedger(sid, ledgerTitle);
+                loadSuppliers();
+            } else {
+                UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
+            }
+        });
+
         document.getElementById('organisationSelect').addEventListener('change', (e) => {
             if (e.target.value) {
                 ApiService.setSelectedOrg(e.target.value);
                 loadSuppliers();
+                document.getElementById('ledgerPanel').style.display = 'none';
             }
         });
 

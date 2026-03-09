@@ -845,7 +845,16 @@ public class DaybookService : IDaybookService
             customerId = customer.Id;
         }
 
+        if (request.LinkedDaybookEntryId.HasValue)
+        {
+            var linkedExists = await _context.DaybookEntries
+                .AnyAsync(e => e.Id == request.LinkedDaybookEntryId.Value && e.OrganisationId == organisationId);
+            if (!linkedExists)
+                throw new ResourceNotFoundException("Linked Daybook Entry", request.LinkedDaybookEntryId.Value.ToString());
+        }
+
         var entry = BuildDaybookEntry(organisationId, "Receipt", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        entry.LinkedDaybookEntryId = request.LinkedDaybookEntryId;
         _context.DaybookEntries.Add(entry);
 
         // DR Bank, CR Credit account
@@ -876,7 +885,16 @@ public class DaybookService : IDaybookService
             supplierId = supplier.Id;
         }
 
+        if (request.LinkedDaybookEntryId.HasValue)
+        {
+            var linkedExists = await _context.DaybookEntries
+                .AnyAsync(e => e.Id == request.LinkedDaybookEntryId.Value && e.OrganisationId == organisationId);
+            if (!linkedExists)
+                throw new ResourceNotFoundException("Linked Daybook Entry", request.LinkedDaybookEntryId.Value.ToString());
+        }
+
         var entry = BuildDaybookEntry(organisationId, "Payment", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        entry.LinkedDaybookEntryId = request.LinkedDaybookEntryId;
         _context.DaybookEntries.Add(entry);
 
         // DR Debit account (AP/Expense), CR Bank
@@ -1122,6 +1140,10 @@ public class DaybookService : IDaybookService
         if (daybookEntry.SupplierId.HasValue)
             supplierName = (await _context.Suppliers.FindAsync(daybookEntry.SupplierId.Value))?.Name;
 
+        string? linkedReference = null;
+        if (daybookEntry.LinkedDaybookEntryId.HasValue)
+            linkedReference = (await _context.DaybookEntries.FindAsync(daybookEntry.LinkedDaybookEntryId.Value))?.ReferenceNumber;
+
         return new DaybookResponse
         {
             Id = daybookEntry.Id,
@@ -1134,6 +1156,8 @@ public class DaybookService : IDaybookService
             CustomerName = customerName,
             SupplierId = daybookEntry.SupplierId,
             SupplierName = supplierName,
+            LinkedDaybookEntryId = daybookEntry.LinkedDaybookEntryId,
+            LinkedReferenceNumber = linkedReference,
             Lines = lines
         };
     }
@@ -1785,6 +1809,357 @@ public class CustomerSupplierService : ICustomerSupplierService
         await _context.SaveChangesAsync();
 
         _logger.LogInformation("Supplier {SupplierId} ({Name}) soft-deleted", supplier.Id, supplier.Name);
+    }
+
+    public async Task<CustomerLedgerResponse> GetCustomerLedgerAsync(Guid organisationId, Guid customerId)
+    {
+        var customer = await _context.Customers
+            .FirstOrDefaultAsync(c => c.Id == customerId && c.OrganisationId == organisationId);
+        if (customer == null)
+            throw new ResourceNotFoundException("Customer", customerId.ToString());
+
+        var entries = await _context.DaybookEntries
+            .Include(e => e.JournalEntries)
+            .Include(e => e.LinkedDaybookEntry)
+            .Where(e => e.CustomerId == customerId)
+            .OrderBy(e => e.EntryDate)
+            .ThenBy(e => e.CreatedAt)
+            .ToListAsync();
+
+        var lines = new List<LedgerLineResponse>();
+        decimal runningBalance = 0;
+
+        foreach (var entry in entries)
+        {
+            var (debit, credit) = GetArAmounts(entry.JournalEntries, entry.Type, customer.ControlAccountId);
+            runningBalance += debit - credit;
+
+            lines.Add(new LedgerLineResponse
+            {
+                EntryId = entry.Id,
+                Type = entry.Type,
+                Date = entry.EntryDate,
+                Reference = entry.ReferenceNumber,
+                Description = entry.Description,
+                Debit = debit,
+                Credit = credit,
+                RunningBalance = runningBalance,
+                IsPosted = entry.IsPosted,
+                LinkedEntryId = entry.LinkedDaybookEntryId,
+                LinkedReference = entry.LinkedDaybookEntry?.ReferenceNumber
+            });
+        }
+
+        // Also include receipts that are linked to this customer's invoices but may not have CustomerId set
+        var linkedReceipts = await _context.DaybookEntries
+            .Include(e => e.JournalEntries)
+            .Where(e => e.OrganisationId == organisationId
+                     && e.CustomerId == null
+                     && e.LinkedDaybookEntryId != null
+                     && entries.Select(inv => inv.Id).Contains(e.LinkedDaybookEntryId!.Value))
+            .ToListAsync();
+
+        foreach (var receipt in linkedReceipts)
+        {
+            // Already included if CustomerId was set; skip if already in list
+            if (entries.Any(e => e.Id == receipt.Id)) continue;
+
+            var (debit, credit) = GetArAmounts(receipt.JournalEntries, receipt.Type, customer.ControlAccountId);
+            runningBalance += debit - credit;
+
+            lines.Add(new LedgerLineResponse
+            {
+                EntryId = receipt.Id,
+                Type = receipt.Type,
+                Date = receipt.EntryDate,
+                Reference = receipt.ReferenceNumber,
+                Description = receipt.Description,
+                Debit = debit,
+                Credit = credit,
+                RunningBalance = runningBalance,
+                IsPosted = receipt.IsPosted,
+                LinkedEntryId = receipt.LinkedDaybookEntryId,
+                LinkedReference = entries.FirstOrDefault(e => e.Id == receipt.LinkedDaybookEntryId)?.ReferenceNumber
+            });
+        }
+
+        lines = lines.OrderBy(l => l.Date).ThenBy(l => l.Type).ToList();
+        // Recalculate running balance after sorting
+        decimal balance = 0;
+        foreach (var line in lines)
+        {
+            balance += line.Debit - line.Credit;
+            line.RunningBalance = balance;
+        }
+
+        return new CustomerLedgerResponse
+        {
+            CustomerId = customer.Id,
+            CustomerName = customer.Name,
+            Lines = lines,
+            ClosingBalance = balance
+        };
+    }
+
+    public async Task<SupplierLedgerResponse> GetSupplierLedgerAsync(Guid organisationId, Guid supplierId)
+    {
+        var supplier = await _context.Suppliers
+            .FirstOrDefaultAsync(s => s.Id == supplierId && s.OrganisationId == organisationId);
+        if (supplier == null)
+            throw new ResourceNotFoundException("Supplier", supplierId.ToString());
+
+        var entries = await _context.DaybookEntries
+            .Include(e => e.JournalEntries)
+            .Include(e => e.LinkedDaybookEntry)
+            .Where(e => e.SupplierId == supplierId)
+            .OrderBy(e => e.EntryDate)
+            .ThenBy(e => e.CreatedAt)
+            .ToListAsync();
+
+        var lines = new List<LedgerLineResponse>();
+        decimal runningBalance = 0;
+
+        foreach (var entry in entries)
+        {
+            var (debit, credit) = GetApAmounts(entry.JournalEntries, entry.Type, supplier.ControlAccountId);
+            // For AP: credit increases balance (we owe more), debit reduces it
+            runningBalance += credit - debit;
+
+            lines.Add(new LedgerLineResponse
+            {
+                EntryId = entry.Id,
+                Type = entry.Type,
+                Date = entry.EntryDate,
+                Reference = entry.ReferenceNumber,
+                Description = entry.Description,
+                Debit = debit,
+                Credit = credit,
+                RunningBalance = runningBalance,
+                IsPosted = entry.IsPosted,
+                LinkedEntryId = entry.LinkedDaybookEntryId,
+                LinkedReference = entry.LinkedDaybookEntry?.ReferenceNumber
+            });
+        }
+
+        // Also include payments linked to this supplier's invoices but may not have SupplierId set
+        var linkedPayments = await _context.DaybookEntries
+            .Include(e => e.JournalEntries)
+            .Where(e => e.OrganisationId == organisationId
+                     && e.SupplierId == null
+                     && e.LinkedDaybookEntryId != null
+                     && entries.Select(inv => inv.Id).Contains(e.LinkedDaybookEntryId!.Value))
+            .ToListAsync();
+
+        foreach (var payment in linkedPayments)
+        {
+            if (entries.Any(e => e.Id == payment.Id)) continue;
+
+            var (debit, credit) = GetApAmounts(payment.JournalEntries, payment.Type, supplier.ControlAccountId);
+            runningBalance += credit - debit;
+
+            lines.Add(new LedgerLineResponse
+            {
+                EntryId = payment.Id,
+                Type = payment.Type,
+                Date = payment.EntryDate,
+                Reference = payment.ReferenceNumber,
+                Description = payment.Description,
+                Debit = debit,
+                Credit = credit,
+                RunningBalance = runningBalance,
+                IsPosted = payment.IsPosted,
+                LinkedEntryId = payment.LinkedDaybookEntryId,
+                LinkedReference = entries.FirstOrDefault(e => e.Id == payment.LinkedDaybookEntryId)?.ReferenceNumber
+            });
+        }
+
+        lines = lines.OrderBy(l => l.Date).ThenBy(l => l.Type).ToList();
+        decimal balance = 0;
+        foreach (var line in lines)
+        {
+            balance += line.Credit - line.Debit;
+            line.RunningBalance = balance;
+        }
+
+        return new SupplierLedgerResponse
+        {
+            SupplierId = supplier.Id,
+            SupplierName = supplier.Name,
+            Lines = lines,
+            ClosingBalance = balance
+        };
+    }
+
+    public async Task<IEnumerable<OutstandingInvoiceResponse>> GetOutstandingInvoicesAsync(Guid organisationId)
+    {
+        var invoices = await _context.DaybookEntries
+            .Include(e => e.JournalEntries)
+            .Include(e => e.Customer)
+            .Where(e => e.OrganisationId == organisationId && e.Type == "Sales")
+            .OrderBy(e => e.EntryDate)
+            .ToListAsync();
+
+        var invoiceIds = invoices.Select(e => e.Id).ToList();
+
+        // Load all receipts that are linked to these invoices
+        var linkedReceipts = await _context.DaybookEntries
+            .Include(e => e.JournalEntries)
+            .Where(e => e.OrganisationId == organisationId
+                     && e.Type == "Receipt"
+                     && e.LinkedDaybookEntryId != null
+                     && invoiceIds.Contains(e.LinkedDaybookEntryId!.Value))
+            .ToListAsync();
+
+        var result = new List<OutstandingInvoiceResponse>();
+
+        foreach (var invoice in invoices)
+        {
+            var controlAccountId = invoice.Customer?.ControlAccountId;
+            var (debit, _) = GetArAmounts(invoice.JournalEntries, invoice.Type, controlAccountId);
+            if (debit <= 0) continue;
+
+            var receiptsForInvoice = linkedReceipts
+                .Where(r => r.LinkedDaybookEntryId == invoice.Id)
+                .ToList();
+
+            decimal totalSettled = receiptsForInvoice
+                .Sum(r => GetArAmounts(r.JournalEntries, r.Type, controlAccountId).credit);
+
+            decimal outstanding = debit - totalSettled;
+            if (outstanding <= 0) continue;
+
+            result.Add(new OutstandingInvoiceResponse
+            {
+                EntryId = invoice.Id,
+                Date = invoice.EntryDate,
+                Reference = invoice.ReferenceNumber,
+                Description = invoice.Description,
+                CustomerId = invoice.CustomerId,
+                CustomerName = invoice.Customer?.Name ?? "(No customer)",
+                InvoiceTotal = debit,
+                TotalSettled = totalSettled,
+                Outstanding = outstanding,
+                IsPosted = invoice.IsPosted
+            });
+        }
+
+        return result;
+    }
+
+    public async Task<IEnumerable<OutstandingInvoiceResponse>> GetOutstandingBillsAsync(Guid organisationId)
+    {
+        var bills = await _context.DaybookEntries
+            .Include(e => e.JournalEntries)
+            .Include(e => e.Supplier)
+            .Where(e => e.OrganisationId == organisationId && e.Type == "Purchase")
+            .OrderBy(e => e.EntryDate)
+            .ToListAsync();
+
+        var billIds = bills.Select(e => e.Id).ToList();
+
+        var linkedPayments = await _context.DaybookEntries
+            .Include(e => e.JournalEntries)
+            .Where(e => e.OrganisationId == organisationId
+                     && e.Type == "Payment"
+                     && e.LinkedDaybookEntryId != null
+                     && billIds.Contains(e.LinkedDaybookEntryId!.Value))
+            .ToListAsync();
+
+        var result = new List<OutstandingInvoiceResponse>();
+
+        foreach (var bill in bills)
+        {
+            var controlAccountId = bill.Supplier?.ControlAccountId;
+            var (_, credit) = GetApAmounts(bill.JournalEntries, bill.Type, controlAccountId);
+            if (credit <= 0) continue;
+
+            var paymentsForBill = linkedPayments
+                .Where(p => p.LinkedDaybookEntryId == bill.Id)
+                .ToList();
+
+            decimal totalSettled = paymentsForBill
+                .Sum(p => GetApAmounts(p.JournalEntries, p.Type, controlAccountId).debit);
+
+            decimal outstanding = credit - totalSettled;
+            if (outstanding <= 0) continue;
+
+            result.Add(new OutstandingInvoiceResponse
+            {
+                EntryId = bill.Id,
+                Date = bill.EntryDate,
+                Reference = bill.ReferenceNumber,
+                Description = bill.Description,
+                SupplierId = bill.SupplierId,
+                SupplierName = bill.Supplier?.Name ?? "(No supplier)",
+                InvoiceTotal = credit,
+                TotalSettled = totalSettled,
+                Outstanding = outstanding,
+                IsPosted = bill.IsPosted
+            });
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Returns (debit, credit) for the AR side of a customer daybook entry.
+    /// When a control account is set, filters to journal lines on that account.
+    /// When no control account is set, falls back to type-based inference:
+    ///   Sales/Receipt have one structurally-predictable debit/credit line for the receivable.
+    /// </summary>
+    private static (decimal debit, decimal credit) GetArAmounts(
+        IEnumerable<JournalEntry> journalEntries,
+        string entryType,
+        Guid? controlAccountId)
+    {
+        var lines = journalEntries.ToList();
+
+        if (controlAccountId.HasValue)
+        {
+            var ctrl = lines.Where(je => je.GLAccountId == controlAccountId.Value).ToList();
+            return (ctrl.Sum(je => je.DebitAmount), ctrl.Sum(je => je.CreditAmount));
+        }
+
+        // Fallback: infer from entry structure
+        // Sales:       DR Receivable (1 line) / CR Revenue+VAT (n lines) → debit = all debits
+        // SalesReturn: CR Receivable (1 line) / DR Returns+VAT (n lines) → credit = all credits
+        // Receipt:     DR Bank (1 line) / CR Receivable (1 line)         → credit = all credits
+        return entryType switch
+        {
+            "Sales"       => (lines.Sum(je => je.DebitAmount),  0m),
+            "SalesReturn" => (0m, lines.Sum(je => je.CreditAmount)),
+            "Receipt"     => (0m, lines.Sum(je => je.CreditAmount)),
+            _             => (0m, 0m)
+        };
+    }
+
+    /// <summary>
+    /// Returns (debit, credit) for the AP side of a supplier daybook entry.
+    /// </summary>
+    private static (decimal debit, decimal credit) GetApAmounts(
+        IEnumerable<JournalEntry> journalEntries,
+        string entryType,
+        Guid? controlAccountId)
+    {
+        var lines = journalEntries.ToList();
+
+        if (controlAccountId.HasValue)
+        {
+            var ctrl = lines.Where(je => je.GLAccountId == controlAccountId.Value).ToList();
+            return (ctrl.Sum(je => je.DebitAmount), ctrl.Sum(je => je.CreditAmount));
+        }
+
+        // Fallback: infer from entry structure
+        // Purchase:       DR Expense+VAT (n lines) / CR Payable (1 line) → credit = all credits
+        // PurchaseReturn: DR Payable (1 line) / CR Expense+VAT (n lines) → debit = all debits
+        // Payment:        DR Payable (1 line) / CR Bank (1 line)         → debit = all debits
+        return entryType switch
+        {
+            "Purchase"       => (0m, lines.Sum(je => je.CreditAmount)),
+            "PurchaseReturn" => (lines.Sum(je => je.DebitAmount),  0m),
+            "Payment"        => (lines.Sum(je => je.DebitAmount),  0m),
+            _                => (0m, 0m)
+        };
     }
 
     private async Task<decimal> GetCustomerBalance(Guid customerId)

@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outstanding - AccuBooks</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <style>
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            padding: 10px 24px;
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--secondary-color);
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            border-color: var(--primary-color);
+            background: var(--primary-color);
+            color: white;
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .summary-bar {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .summary-card {
+            background: var(--light-bg);
+            border-radius: 8px;
+            padding: 15px 20px;
+            min-width: 180px;
+        }
+        .summary-card .label { font-size: 12px; color: var(--secondary-color); margin-bottom: 4px; }
+        .summary-card .value { font-size: 22px; font-weight: bold; }
+        .outstanding-amount { color: var(--danger-color); }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <aside class="sidebar">
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: var(--primary-color); margin-bottom: 10px;">AccuBooks</h3>
+                <select id="organisationSelect" style="width: 100%; padding: 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                    <option value="">Select Organisation</option>
+                </select>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="dashboard.html">📊 Dashboard</a></li>
+                <li><a href="gl-accounts.html">📖 GL Accounts</a></li>
+                <li><a href="daybook.html">📝 Daybook</a></li>
+                <li><a href="reports.html">📈 Reports</a></li>
+                <li><a href="customers.html">👥 Customers</a></li>
+                <li><a href="suppliers.html">🏢 Suppliers</a></li>
+                <li><a href="outstanding.html" class="active">⏳ Outstanding</a></li>
+                <li><a href="products.html">📦 Products &amp; Services</a></li>
+                <li><a href="organisations.html">🏭 Organisations</a></li>
+                <li><hr style="margin: 15px 0;"></li>
+                <li><a href="#logout" id="logoutBtn">🚪 Logout</a></li>
+            </ul>
+        </aside>
+
+        <main class="main-content">
+            <div class="dashboard-header">
+                <h1>Outstanding</h1>
+                <p>All unpaid invoices and bills across all customers and suppliers</p>
+            </div>
+
+            <div class="tab-buttons">
+                <button class="tab-btn active" id="tabAR" onclick="switchTab('ar')">Accounts Receivable</button>
+                <button class="tab-btn" id="tabAP" onclick="switchTab('ap')">Accounts Payable</button>
+            </div>
+
+            <!-- AR Tab -->
+            <div id="arTab" class="tab-content active">
+                <div class="summary-bar" id="arSummary" style="display: none;">
+                    <div class="summary-card">
+                        <div class="label">Invoices Outstanding</div>
+                        <div class="value" id="arCount">0</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Total Invoiced</div>
+                        <div class="value" id="arTotal">£0.00</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Total Outstanding</div>
+                        <div class="value outstanding-amount" id="arOutstanding">£0.00</div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Customer</th>
+                                <th>Reference</th>
+                                <th>Description</th>
+                                <th>Invoice Total</th>
+                                <th>Received</th>
+                                <th>Outstanding</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="arTable">
+                            <tr><td colspan="9" style="text-align:center; color: var(--secondary-color);">Select an organisation to load</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- AP Tab -->
+            <div id="apTab" class="tab-content">
+                <div class="summary-bar" id="apSummary" style="display: none;">
+                    <div class="summary-card">
+                        <div class="label">Bills Outstanding</div>
+                        <div class="value" id="apCount">0</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Total Billed</div>
+                        <div class="value" id="apTotal">£0.00</div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="label">Total Outstanding</div>
+                        <div class="value outstanding-amount" id="apOutstanding">£0.00</div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Supplier</th>
+                                <th>Reference</th>
+                                <th>Description</th>
+                                <th>Bill Total</th>
+                                <th>Paid</th>
+                                <th>Outstanding</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="apTable">
+                            <tr><td colspan="9" style="text-align:center; color: var(--secondary-color);">Select an organisation to load</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Record Receipt Panel -->
+            <div id="receiptPanel" style="display:none; margin-top: 30px; background: var(--light-bg); border-radius: 8px; padding: 20px;">
+                <h3 id="receiptPanelTitle">Record Receipt</h3>
+                <form id="receiptForm">
+                    <input type="hidden" id="receiptLinkedEntryId">
+                    <input type="hidden" id="receiptCustomerId">
+                    <input type="hidden" id="receiptCreditAccountId">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label>Receipt Date</label>
+                            <input type="date" id="receiptDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Reference</label>
+                            <input type="text" id="receiptReference" placeholder="e.g. CHQ-001">
+                        </div>
+                        <div class="form-group">
+                            <label>Amount</label>
+                            <input type="number" id="receiptAmount" step="0.01" min="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" id="receiptDescription">
+                        </div>
+                        <div class="form-group">
+                            <label>Bank / Cash Account (debit)</label>
+                            <select id="receiptBankAccount" required>
+                                <option value="">Select account...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Accounts Receivable (credit)</label>
+                            <div id="receiptCreditAccountDisplay" style="padding: 8px 12px; background: #f8f9fa; border: 1px solid var(--border-color); border-radius: 4px; color: var(--secondary-color); font-size: 14px;">Loading...</div>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                        <button type="submit" class="btn btn-success">Record Receipt</button>
+                        <button type="button" class="btn btn-secondary" onclick="closeReceiptPanel()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Record Payment Panel -->
+            <div id="paymentPanel" style="display:none; margin-top: 30px; background: var(--light-bg); border-radius: 8px; padding: 20px;">
+                <h3 id="paymentPanelTitle">Record Payment</h3>
+                <form id="paymentForm">
+                    <input type="hidden" id="paymentLinkedEntryId">
+                    <input type="hidden" id="paymentSupplierId">
+                    <input type="hidden" id="paymentDebitAccountId">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <label>Payment Date</label>
+                            <input type="date" id="paymentDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Reference</label>
+                            <input type="text" id="paymentReference" placeholder="e.g. BAC-001">
+                        </div>
+                        <div class="form-group">
+                            <label>Amount</label>
+                            <input type="number" id="paymentAmount" step="0.01" min="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Description</label>
+                            <input type="text" id="paymentDescription">
+                        </div>
+                        <div class="form-group">
+                            <label>Accounts Payable (debit)</label>
+                            <div id="paymentDebitAccountDisplay" style="padding: 8px 12px; background: #f8f9fa; border: 1px solid var(--border-color); border-radius: 4px; color: var(--secondary-color); font-size: 14px;">Loading...</div>
+                        </div>
+                        <div class="form-group">
+                            <label>Bank / Cash Account (credit)</label>
+                            <select id="paymentBankAccount" required>
+                                <option value="">Select account...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                        <button type="submit" class="btn btn-success">Record Payment</button>
+                        <button type="button" class="btn btn-secondary" onclick="closePaymentPanel()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <script type="module">
+        import { ApiService, UIUtils, AuthGuard } from '../js/api.js';
+
+        AuthGuard.init();
+
+        let currentTab = 'ar';
+        let cachedAccounts = null;
+
+        window.switchTab = (tab) => {
+            currentTab = tab;
+            document.getElementById('arTab').classList.toggle('active', tab === 'ar');
+            document.getElementById('apTab').classList.toggle('active', tab === 'ap');
+            document.getElementById('tabAR').classList.toggle('active', tab === 'ar');
+            document.getElementById('tabAP').classList.toggle('active', tab === 'ap');
+            document.getElementById('receiptPanel').style.display = 'none';
+            document.getElementById('paymentPanel').style.display = 'none';
+        };
+
+        async function loadAccounts() {
+            if (cachedAccounts) return cachedAccounts;
+            const orgId = ApiService.getSelectedOrg();
+            const resp = await ApiService.getGLAccounts(orgId);
+            if (resp.ok) cachedAccounts = resp.data.filter(a => a.isActive);
+            return cachedAccounts || [];
+        }
+
+        async function loadOutstanding() {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) return;
+            cachedAccounts = null;
+
+            UIUtils.showLoading();
+            const [arResp, apResp] = await Promise.all([
+                ApiService.getOutstandingInvoices(orgId),
+                ApiService.getOutstandingBills(orgId)
+            ]);
+            UIUtils.hideLoading();
+
+            if (arResp.ok) renderAR(arResp.data);
+            if (apResp.ok) renderAP(apResp.data);
+        }
+
+        function renderAR(invoices) {
+            const tbody = document.getElementById('arTable');
+            if (invoices.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color: var(--secondary-color);">No outstanding invoices</td></tr>';
+                document.getElementById('arSummary').style.display = 'none';
+                return;
+            }
+
+            const totalInvoiced = invoices.reduce((s, i) => s + i.invoiceTotal, 0);
+            const totalOutstanding = invoices.reduce((s, i) => s + i.outstanding, 0);
+            document.getElementById('arCount').textContent = invoices.length;
+            document.getElementById('arTotal').textContent = UIUtils.formatCurrency(totalInvoiced);
+            document.getElementById('arOutstanding').textContent = UIUtils.formatCurrency(totalOutstanding);
+            document.getElementById('arSummary').style.display = 'flex';
+
+            tbody.innerHTML = invoices.map(inv => `
+                <tr>
+                    <td>${UIUtils.formatDate(inv.date)}</td>
+                    <td>${inv.customerName}</td>
+                    <td>${inv.reference || '-'}</td>
+                    <td>${inv.description || '-'}</td>
+                    <td style="text-align:right;">${UIUtils.formatCurrency(inv.invoiceTotal)}</td>
+                    <td style="text-align:right;">${UIUtils.formatCurrency(inv.totalSettled)}</td>
+                    <td style="text-align:right; font-weight:bold; color: var(--danger-color);">${UIUtils.formatCurrency(inv.outstanding)}</td>
+                    <td>${inv.isPosted ? '<span style="color:var(--success-color);font-size:12px;">Posted</span>' : '<span style="color:var(--secondary-color);font-size:12px;">Draft</span>'}</td>
+                    <td><button class="btn btn-sm btn-success" onclick="openReceiptForm('${inv.entryId}', '${inv.customerId || ''}', ${inv.outstanding}, '${(inv.reference || '').replace(/'/g, "\\'")}')">Record Receipt</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderAP(bills) {
+            const tbody = document.getElementById('apTable');
+            if (bills.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color: var(--secondary-color);">No outstanding bills</td></tr>';
+                document.getElementById('apSummary').style.display = 'none';
+                return;
+            }
+
+            const totalBilled = bills.reduce((s, b) => s + b.invoiceTotal, 0);
+            const totalOutstanding = bills.reduce((s, b) => s + b.outstanding, 0);
+            document.getElementById('apCount').textContent = bills.length;
+            document.getElementById('apTotal').textContent = UIUtils.formatCurrency(totalBilled);
+            document.getElementById('apOutstanding').textContent = UIUtils.formatCurrency(totalOutstanding);
+            document.getElementById('apSummary').style.display = 'flex';
+
+            tbody.innerHTML = bills.map(bill => `
+                <tr>
+                    <td>${UIUtils.formatDate(bill.date)}</td>
+                    <td>${bill.supplierName}</td>
+                    <td>${bill.reference || '-'}</td>
+                    <td>${bill.description || '-'}</td>
+                    <td style="text-align:right;">${UIUtils.formatCurrency(bill.invoiceTotal)}</td>
+                    <td style="text-align:right;">${UIUtils.formatCurrency(bill.totalSettled)}</td>
+                    <td style="text-align:right; font-weight:bold; color: var(--danger-color);">${UIUtils.formatCurrency(bill.outstanding)}</td>
+                    <td>${bill.isPosted ? '<span style="color:var(--success-color);font-size:12px;">Posted</span>' : '<span style="color:var(--secondary-color);font-size:12px;">Draft</span>'}</td>
+                    <td><button class="btn btn-sm btn-warning" onclick="openPaymentForm('${bill.entryId}', '${bill.supplierId || ''}', ${bill.outstanding}, '${(bill.reference || '').replace(/'/g, "\\'")}')">Record Payment</button></td>
+                </tr>
+            `).join('');
+        }
+
+        window.openReceiptForm = async (invoiceEntryId, customerId, amount, ref) => {
+            document.getElementById('receiptLinkedEntryId').value = invoiceEntryId;
+            document.getElementById('receiptCustomerId').value = customerId;
+            document.getElementById('receiptAmount').value = amount.toFixed(2);
+            document.getElementById('receiptDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('receiptDescription').value = ref ? `Receipt for invoice ${ref}` : 'Receipt';
+            document.getElementById('receiptReference').value = '';
+            document.getElementById('receiptPanelTitle').textContent = ref ? `Record Receipt for Invoice ${ref}` : 'Record Receipt';
+
+            const accounts = await loadAccounts();
+            const bankSel = document.getElementById('receiptBankAccount');
+            bankSel.innerHTML = '<option value="">Select bank/cash account...</option>'
+                + accounts.filter(a => a.type === 'Asset')
+                    .map(a => `<option value="${a.id}">${a.code} - ${a.name}</option>`).join('');
+
+            const arAccount = accounts.find(a => a.type === 'Asset' && /receivable/i.test(a.name));
+            const display = document.getElementById('receiptCreditAccountDisplay');
+            const hidden = document.getElementById('receiptCreditAccountId');
+            if (arAccount) {
+                hidden.value = arAccount.id;
+                display.textContent = `${arAccount.code} - ${arAccount.name}`;
+                display.style.color = 'var(--secondary-color)';
+            } else {
+                hidden.value = '';
+                display.textContent = 'No receivables account found — check your chart of accounts';
+                display.style.color = 'var(--danger-color)';
+            }
+
+            document.getElementById('paymentPanel').style.display = 'none';
+            document.getElementById('receiptPanel').style.display = 'block';
+            document.getElementById('receiptPanel').scrollIntoView({ behavior: 'smooth' });
+        };
+
+        window.closeReceiptPanel = () => {
+            document.getElementById('receiptPanel').style.display = 'none';
+        };
+
+        window.openPaymentForm = async (billEntryId, supplierId, amount, ref) => {
+            document.getElementById('paymentLinkedEntryId').value = billEntryId;
+            document.getElementById('paymentSupplierId').value = supplierId;
+            document.getElementById('paymentAmount').value = amount.toFixed(2);
+            document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('paymentDescription').value = ref ? `Payment for invoice ${ref}` : 'Payment';
+            document.getElementById('paymentReference').value = '';
+            document.getElementById('paymentPanelTitle').textContent = ref ? `Record Payment for Invoice ${ref}` : 'Record Payment';
+
+            const accounts = await loadAccounts();
+            const bankSel = document.getElementById('paymentBankAccount');
+            bankSel.innerHTML = '<option value="">Select bank/cash account...</option>'
+                + accounts.filter(a => a.type === 'Asset')
+                    .map(a => `<option value="${a.id}">${a.code} - ${a.name}</option>`).join('');
+
+            const apAccount = accounts.find(a => a.type === 'Liability' && /payable/i.test(a.name));
+            const display = document.getElementById('paymentDebitAccountDisplay');
+            const hidden = document.getElementById('paymentDebitAccountId');
+            if (apAccount) {
+                hidden.value = apAccount.id;
+                display.textContent = `${apAccount.code} - ${apAccount.name}`;
+                display.style.color = 'var(--secondary-color)';
+            } else {
+                hidden.value = '';
+                display.textContent = 'No payables account found — check your chart of accounts';
+                display.style.color = 'var(--danger-color)';
+            }
+
+            document.getElementById('receiptPanel').style.display = 'none';
+            document.getElementById('paymentPanel').style.display = 'block';
+            document.getElementById('paymentPanel').scrollIntoView({ behavior: 'smooth' });
+        };
+
+        window.closePaymentPanel = () => {
+            document.getElementById('paymentPanel').style.display = 'none';
+        };
+
+        document.getElementById('receiptForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const orgId = ApiService.getSelectedOrg();
+            const receiptData = {
+                entryDate: document.getElementById('receiptDate').value,
+                referenceNumber: document.getElementById('receiptReference').value || null,
+                description: document.getElementById('receiptDescription').value,
+                customerId: document.getElementById('receiptCustomerId').value || null,
+                bankAccountId: document.getElementById('receiptBankAccount').value,
+                creditAccountId: document.getElementById('receiptCreditAccountId').value,
+                amount: parseFloat(document.getElementById('receiptAmount').value),
+                linkedDaybookEntryId: document.getElementById('receiptLinkedEntryId').value || null
+            };
+            UIUtils.showLoading();
+            const response = await ApiService.createReceiptDaybookEntry(orgId, receiptData);
+            UIUtils.hideLoading();
+            if (response.ok) {
+                UIUtils.showAlert('Receipt recorded!', 'success');
+                document.getElementById('receiptPanel').style.display = 'none';
+                loadOutstanding();
+            } else {
+                UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
+            }
+        });
+
+        document.getElementById('paymentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const orgId = ApiService.getSelectedOrg();
+            const paymentData = {
+                entryDate: document.getElementById('paymentDate').value,
+                referenceNumber: document.getElementById('paymentReference').value || null,
+                description: document.getElementById('paymentDescription').value,
+                supplierId: document.getElementById('paymentSupplierId').value || null,
+                debitAccountId: document.getElementById('paymentDebitAccountId').value,
+                bankAccountId: document.getElementById('paymentBankAccount').value,
+                amount: parseFloat(document.getElementById('paymentAmount').value),
+                linkedDaybookEntryId: document.getElementById('paymentLinkedEntryId').value || null
+            };
+            UIUtils.showLoading();
+            const response = await ApiService.createPaymentDaybookEntry(orgId, paymentData);
+            UIUtils.hideLoading();
+            if (response.ok) {
+                UIUtils.showAlert('Payment recorded!', 'success');
+                document.getElementById('paymentPanel').style.display = 'none';
+                loadOutstanding();
+            } else {
+                UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error');
+            }
+        });
+
+        document.getElementById('organisationSelect').addEventListener('change', (e) => {
+            if (e.target.value) {
+                ApiService.setSelectedOrg(e.target.value);
+                loadOutstanding();
+            }
+        });
+
+        await ApiService.populateOrganisationSelector();
+        loadOutstanding();
+
+        document.getElementById('logoutBtn').addEventListener('click', (e) => {
+            e.preventDefault();
+            ApiService.logout();
+            window.location.href = 'login.html';
+        });
+    </script>
+</body>
+</html>

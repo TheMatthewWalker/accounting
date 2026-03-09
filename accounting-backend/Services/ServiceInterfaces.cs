@@ -240,6 +240,8 @@ public class CreateReceiptDaybookRequest
     public Guid CreditAccountId { get; set; }
     [Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than zero")]
     public decimal Amount { get; set; }
+    // Optional: link this receipt to a specific sales invoice
+    public Guid? LinkedDaybookEntryId { get; set; }
 }
 
 // ---- Payment Daybook (money paid out of bank) ----
@@ -257,6 +259,8 @@ public class CreatePaymentDaybookRequest
     public Guid BankAccountId { get; set; }
     [Range(0.01, double.MaxValue, ErrorMessage = "Amount must be greater than zero")]
     public decimal Amount { get; set; }
+    // Optional: link this payment to a specific purchase invoice
+    public Guid? LinkedDaybookEntryId { get; set; }
 }
 
 // ---- Manual Journal ----
@@ -295,6 +299,8 @@ public class DaybookResponse
     public string? CustomerName { get; set; }
     public Guid? SupplierId { get; set; }
     public string? SupplierName { get; set; }
+    public Guid? LinkedDaybookEntryId { get; set; }
+    public string? LinkedReferenceNumber { get; set; }
     public List<JournalLineResponse> Lines { get; set; } = new List<JournalLineResponse>();
 }
 
@@ -419,12 +425,65 @@ public interface ICustomerSupplierService
     Task<IEnumerable<CustomerResponse>> GetCustomersByOrganisationAsync(Guid organisationId);
     Task<CustomerResponse> UpdateCustomerAsync(Guid customerId, UpdateCustomerRequest request);
     Task DeleteCustomerAsync(Guid customerId);
+    Task<CustomerLedgerResponse> GetCustomerLedgerAsync(Guid organisationId, Guid customerId);
+    Task<IEnumerable<OutstandingInvoiceResponse>> GetOutstandingInvoicesAsync(Guid organisationId);
 
     Task<SupplierResponse> CreateSupplierAsync(Guid organisationId, CreateSupplierRequest request);
     Task<SupplierResponse> GetSupplierAsync(Guid supplierId);
     Task<IEnumerable<SupplierResponse>> GetSuppliersByOrganisationAsync(Guid organisationId);
     Task<SupplierResponse> UpdateSupplierAsync(Guid supplierId, UpdateSupplierRequest request);
     Task DeleteSupplierAsync(Guid supplierId);
+    Task<SupplierLedgerResponse> GetSupplierLedgerAsync(Guid organisationId, Guid supplierId);
+    Task<IEnumerable<OutstandingInvoiceResponse>> GetOutstandingBillsAsync(Guid organisationId);
+}
+
+// ---- Subsidiary Ledger (customer/supplier account breakdown) ----
+
+public class LedgerLineResponse
+{
+    public Guid EntryId { get; set; }
+    public string Type { get; set; } = string.Empty;
+    public DateTime Date { get; set; }
+    public string? Reference { get; set; }
+    public string? Description { get; set; }
+    public decimal Debit { get; set; }
+    public decimal Credit { get; set; }
+    public decimal RunningBalance { get; set; }
+    public bool IsPosted { get; set; }
+    public Guid? LinkedEntryId { get; set; }
+    public string? LinkedReference { get; set; }
+}
+
+public class CustomerLedgerResponse
+{
+    public Guid CustomerId { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public List<LedgerLineResponse> Lines { get; set; } = new();
+    public decimal ClosingBalance { get; set; }
+}
+
+public class SupplierLedgerResponse
+{
+    public Guid SupplierId { get; set; }
+    public string SupplierName { get; set; } = string.Empty;
+    public List<LedgerLineResponse> Lines { get; set; } = new();
+    public decimal ClosingBalance { get; set; }
+}
+
+public class OutstandingInvoiceResponse
+{
+    public Guid EntryId { get; set; }
+    public DateTime Date { get; set; }
+    public string? Reference { get; set; }
+    public string? Description { get; set; }
+    public Guid? CustomerId { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public Guid? SupplierId { get; set; }
+    public string SupplierName { get; set; } = string.Empty;
+    public decimal InvoiceTotal { get; set; }
+    public decimal TotalSettled { get; set; }
+    public decimal Outstanding { get; set; }
+    public bool IsPosted { get; set; }
 }
 
 public class CreateCustomerRequest

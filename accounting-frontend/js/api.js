@@ -347,6 +347,10 @@ class ApiService {
         );
     }
 
+    static async getCustomerLedger(organisationId, customerId) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/customers/${customerId}/ledger`);
+    }
+
     // Supplier Endpoints
     static async createSupplier(organisationId, supplier) {
         return this.request(
@@ -377,6 +381,18 @@ class ApiService {
             `${API_BASE_URL}/organisations/${organisationId}/suppliers/${supplierId}`,
             'DELETE'
         );
+    }
+
+    static async getSupplierLedger(organisationId, supplierId) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/suppliers/${supplierId}/ledger`);
+    }
+
+    static async getOutstandingInvoices(organisationId) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/customers/outstanding`);
+    }
+
+    static async getOutstandingBills(organisationId) {
+        return this.request(`${API_BASE_URL}/organisations/${organisationId}/suppliers/outstanding`);
     }
 
     // Helper Methods
@@ -495,11 +511,13 @@ export { ApiService, UIUtils, AuthGuard };
 //   • Periodic re-verification every 5 minutes (catches expired JWTs)
 //   • Re-verification when the tab regains focus (handles sleep / long idle)
 //   • Cross-tab logout detection via the storage event
+//   • "Backend unavailable" banner when the server cannot be reached
 
 class AuthGuard {
     static _intervalId = null;
     static _POLL_MS = 5 * 60 * 1000; // 5 minutes
     static _bound = false;
+    static _offline = false;
 
     static init() {
         // 1. Immediate client-side gate
@@ -536,15 +554,54 @@ class AuthGuard {
             this._redirect();
             return;
         }
-        // Any authenticated request triggers the global 401 handler in
-        // ApiService.request() which clears the token and redirects.
-        // We use listOrganisations as a lightweight ping.
-        // Network errors (status 0) are ignored — don't boot users for flaky wifi.
+
         const response = await ApiService.listOrganisations();
-        if (!response.ok && response.status !== 0) {
-            // Non-network failure (e.g. 401, 403) → session gone
+
+        if (response.status === 0) {
+            // Network error — backend unreachable
+            this._showOfflineBanner();
+        } else if (!response.ok) {
+            // Auth failure (401/403) → session gone
             this._redirect();
+        } else {
+            // Backend responded successfully
+            this._hideOfflineBanner();
         }
+    }
+
+    static _showOfflineBanner() {
+        if (this._offline) return;
+        this._offline = true;
+
+        const banner = document.createElement('div');
+        banner.id = '__auth-offline-banner';
+        banner.style.cssText = `
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 9999;
+            background: #b91c1c;
+            color: #fff;
+            text-align: center;
+            padding: 12px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.01em;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        `;
+        banner.textContent = '⚠ Backend unavailable — you are not connected. Data cannot be loaded or saved.';
+        document.body.prepend(banner);
+
+        // Push page content down so the banner doesn't overlap it
+        document.body.style.paddingTop = (banner.offsetHeight + 'px');
+    }
+
+    static _hideOfflineBanner() {
+        if (!this._offline) return;
+        this._offline = false;
+
+        const banner = document.getElementById('__auth-offline-banner');
+        if (banner) banner.remove();
+        document.body.style.paddingTop = '';
     }
 
     static _redirect() {

@@ -153,6 +153,25 @@ body {
     border-color: var(--danger-color);
 }
 
+.btn-info {
+    background: var(--white);
+    color: #0369a1;
+    border-color: #7dd3fc;
+}
+.btn-info:hover {
+    background: #e0f2fe;
+    border-color: #0369a1;
+}
+.btn-warning {
+    background: var(--white);
+    color: #92400e;
+    border-color: #fcd34d;
+}
+.btn-warning:hover {
+    background: #fef3c7;
+    border-color: #92400e;
+}
+
 .btn-lg { padding: 11px 24px; font-size: 15px; }
 .btn-sm { padding: 5px 12px; font-size: 12px; border-radius: var(--radius-sm); }
 

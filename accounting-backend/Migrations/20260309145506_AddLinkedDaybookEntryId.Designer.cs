@@ -4,6 +4,7 @@ using AccountingApp.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace AccountingApp.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260309145506_AddLinkedDaybookEntryId")]
+    partial class AddLinkedDaybookEntryId
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -140,9 +143,6 @@ namespace AccountingApp.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<Guid?>("LinkedDaybookEntryId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CustomerId");
@@ -150,8 +150,6 @@ namespace AccountingApp.Migrations
                     b.HasIndex("OrganisationId");
 
                     b.HasIndex("SupplierId");
-
-                    b.HasIndex("LinkedDaybookEntryId");
 
                     b.ToTable("DaybookEntries");
                 });
@@ -557,18 +555,11 @@ namespace AccountingApp.Migrations
                         .HasForeignKey("SupplierId")
                         .OnDelete(DeleteBehavior.SetNull);
 
-                    b.HasOne("AccountingApp.Models.DaybookEntry", "LinkedDaybookEntry")
-                        .WithMany()
-                        .HasForeignKey("LinkedDaybookEntryId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
                     b.Navigation("Customer");
 
                     b.Navigation("Organisation");
 
                     b.Navigation("Supplier");
-
-                    b.Navigation("LinkedDaybookEntry");
                 });
 
             modelBuilder.Entity("AccountingApp.Models.GLAccount", b =>
