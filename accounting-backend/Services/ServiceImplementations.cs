@@ -570,6 +570,30 @@ public class DaybookService : IDaybookService
         _logger.LogInformation("Daybook entry {EntryId} deleted", entryId);
     }
 
+    public async Task<DaybookResponse> UpdateJournalLineAccountAsync(Guid entryId, Guid lineId, Guid newGLAccountId)
+    {
+        var entry = await _context.DaybookEntries.FindAsync(entryId)
+            ?? throw new ResourceNotFoundException("Daybook Entry", entryId.ToString());
+
+        if (entry.IsPosted)
+            throw new BusinessRuleException("Cannot modify a posted daybook entry.", "ENTRY_POSTED");
+
+        var line = await _context.JournalEntries
+            .FirstOrDefaultAsync(l => l.Id == lineId && l.DaybookEntryId == entryId)
+            ?? throw new ResourceNotFoundException("Journal Line", lineId.ToString());
+
+        var accountExists = await _context.GLAccounts
+            .AnyAsync(a => a.Id == newGLAccountId && a.OrganisationId == entry.OrganisationId && a.IsActive);
+        if (!accountExists)
+            throw new ResourceNotFoundException("GL Account", newGLAccountId.ToString());
+
+        line.GLAccountId = newGLAccountId;
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Journal line {LineId} on entry {EntryId} reassigned to GL account {AccountId}", lineId, entryId, newGLAccountId);
+        return await MapToDaybookResponse(entry);
+    }
+
     public async Task<DaybookResponse> CreateSalesDaybookAsync(Guid organisationId, CreateSalesDaybookRequest request)
     {
         _logger.LogDebug("Creating Sales daybook entry for organisation {OrganisationId}", organisationId);

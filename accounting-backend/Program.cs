@@ -7,6 +7,9 @@ using AccountingApp.Services;
 using AccountingApp.Middleware;
 using Serilog;
 
+// Treat DateTime.Unspecified as UTC when writing to PostgreSQL (Npgsql 6+ breaking change)
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, configuration) =>

@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = 'https://172.16.2.247:5000/api';
+const API_BASE_URL = 'http://localhost:5000/api';
 const TOKEN_KEY = 'authToken';
 const USER_KEY = 'currentUser';
 const ORG_KEY = 'selectedOrganisation';
@@ -247,6 +247,14 @@ class ApiService {
         return this.request(
             `${API_BASE_URL}/organisations/${organisationId}/daybook/${entryId}`,
             'DELETE'
+        );
+    }
+
+    static async updateJournalLine(organisationId, entryId, lineId, glAccountId) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/daybook/${entryId}/lines/${lineId}`,
+            'PATCH',
+            { glAccountId }
         );
     }
 

@@ -145,4 +145,12 @@ public class DaybookController : ControllerBase
         await _service.DeleteDaybookEntryAsync(entryId);
         return NoContent();
     }
+
+    [HttpPatch("{entryId}/lines/{lineId}")]
+    [RequireOrganisationRole("Bookkeeper")]
+    public async Task<IActionResult> UpdateJournalLine(Guid organisationId, Guid entryId, Guid lineId, [FromBody] UpdateJournalLineRequest request)
+    {
+        var result = await _service.UpdateJournalLineAccountAsync(entryId, lineId, request.GLAccountId);
+        return Ok(result);
+    }
 }
