@@ -391,6 +391,8 @@ public class DaybookService : IDaybookService
     {
         _logger.LogDebug("Creating daybook entry of type {Type} for organisation {OrganisationId}", request.Type, organisationId);
 
+        await EnforceMonthlyEntryLimitAsync(organisationId);
+
         if (request.EntryDate.Date > DateTime.UtcNow.Date)
         {
             _logger.LogWarning("Daybook entry creation rejected: future date {EntryDate}", request.EntryDate);
@@ -1265,6 +1267,32 @@ public class DaybookService : IDaybookService
         ["Journal"]        = "JN",
     };
 
+    private async Task EnforceMonthlyEntryLimitAsync(Guid organisationId)
+    {
+        var org = await _context.Organisations
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == organisationId);
+        if (org == null)
+            throw new ResourceNotFoundException("Organisation", organisationId.ToString());
+
+        if (org.SubscriptionTier != "Free")
+            return;
+
+        var now = DateTime.UtcNow;
+        var monthStart = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+        var monthEnd = monthStart.AddMonths(1);
+
+        var count = await _context.DaybookEntries
+            .CountAsync(e => e.OrganisationId == organisationId
+                          && e.CreatedAt >= monthStart
+                          && e.CreatedAt < monthEnd);
+
+        if (count >= 50)
+            throw new BusinessRuleException(
+                "Free plan organisations are limited to 50 daybook entries per month. " +
+                "Upgrade to a paid plan to create unlimited entries.");
+    }
+
     private async Task<string> NextInternalReferenceAsync(Guid organisationId, string entryType)
     {
         var prefix = _typePrefixes.GetValueOrDefault(entryType, "XX");
@@ -1281,6 +1309,7 @@ public class DaybookService : IDaybookService
 
     private async Task<DaybookEntry> BuildDaybookEntryAsync(Guid organisationId, string type, string? externalReference, DateTime entryDate, string? description, Guid? customerId, Guid? supplierId)
     {
+        await EnforceMonthlyEntryLimitAsync(organisationId);
         var internalRef = await NextInternalReferenceAsync(organisationId, type);
         return new DaybookEntry
         {
