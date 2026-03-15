@@ -135,6 +135,7 @@ public interface IDaybookService
     Task<IEnumerable<DaybookResponse>> GetDaybookEntriesByOrganisationAsync(Guid organisationId, DateTime? fromDate = null, DateTime? toDate = null);
     Task PostDaybookEntryAsync(Guid entryId);
     Task DeleteDaybookEntryAsync(Guid entryId);
+    Task<DaybookResponse> UpdateJournalLineAccountAsync(Guid entryId, Guid lineId, Guid newGLAccountId);
 }
 
 // ---- Sales Daybook ----
@@ -285,6 +286,11 @@ public class CreateJournalLineRequest
     public decimal DebitAmount { get; set; }
     public decimal CreditAmount { get; set; }
     public string? NarrationLine { get; set; }
+}
+
+public class UpdateJournalLineRequest
+{
+    public Guid GLAccountId { get; set; }
 }
 
 public class DaybookResponse

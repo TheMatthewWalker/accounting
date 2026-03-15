@@ -250,6 +250,14 @@ class ApiService {
         );
     }
 
+    static async updateJournalLine(organisationId, entryId, lineId, glAccountId) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/daybook/${entryId}/lines/${lineId}`,
+            'PATCH',
+            { glAccountId }
+        );
+    }
+
     // Simplified daybook endpoints (no GL account selection required)
     static async createSimpleSalesEntry(organisationId, entry) {
         return this.request(`${API_BASE_URL}/organisations/${organisationId}/daybook/simple-sales`, 'POST', entry);

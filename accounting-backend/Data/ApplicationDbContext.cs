@@ -28,8 +28,8 @@ public class ApplicationDbContext : DbContext
         // User configuration
         modelBuilder.Entity<User>().HasKey(u => u.Id);
         modelBuilder.Entity<User>().HasIndex(u => u.Email).IsUnique();
-        modelBuilder.Entity<User>().HasIndex(u => u.GoogleId).IsUnique().HasFilter("GoogleId IS NOT NULL");
-        modelBuilder.Entity<User>().HasIndex(u => u.MicrosoftId).IsUnique().HasFilter("MicrosoftId IS NOT NULL");
+        modelBuilder.Entity<User>().HasIndex(u => u.GoogleId).IsUnique().HasFilter("\"GoogleId\" IS NOT NULL");
+        modelBuilder.Entity<User>().HasIndex(u => u.MicrosoftId).IsUnique().HasFilter("\"MicrosoftId\" IS NOT NULL");
 
         // Organisation configuration
         modelBuilder.Entity<Organisation>().HasKey(o => o.Id);
@@ -75,12 +75,11 @@ public class ApplicationDbContext : DbContext
             .WithOne(je => je.DaybookEntry)
             .HasForeignKey(je => je.DaybookEntryId)
             .OnDelete(DeleteBehavior.Cascade);
-        // Configure Organisation relationship on DaybookEntry to use NO ACTION to avoid cascade cycles
         modelBuilder.Entity<DaybookEntry>()
             .HasOne(de => de.Organisation)
             .WithMany(o => o.DaybookEntries)
             .HasForeignKey(de => de.OrganisationId)
-            .OnDelete(DeleteBehavior.NoAction);
+            .OnDelete(DeleteBehavior.Cascade);
         // Optional Customer/Supplier links
         modelBuilder.Entity<DaybookEntry>()
             .HasOne(de => de.Customer)
@@ -96,7 +95,7 @@ public class ApplicationDbContext : DbContext
             .HasOne(de => de.LinkedDaybookEntry)
             .WithMany()
             .HasForeignKey(de => de.LinkedDaybookEntryId)
-            .OnDelete(DeleteBehavior.NoAction);
+            .OnDelete(DeleteBehavior.SetNull);
 
         // JournalEntry configuration
         modelBuilder.Entity<JournalEntry>().HasKey(je => je.Id);
@@ -108,12 +107,11 @@ public class ApplicationDbContext : DbContext
             .WithMany(ga => ga.Customers)
             .HasForeignKey(c => c.ControlAccountId)
             .OnDelete(DeleteBehavior.SetNull);
-        // Configure Organisation relationship on Customer to use NO ACTION to avoid cascade cycles
         modelBuilder.Entity<Customer>()
             .HasOne(c => c.Organisation)
             .WithMany(o => o.Customers)
             .HasForeignKey(c => c.OrganisationId)
-            .OnDelete(DeleteBehavior.NoAction);
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Supplier configuration
         modelBuilder.Entity<Supplier>().HasKey(s => s.Id);
@@ -122,12 +120,11 @@ public class ApplicationDbContext : DbContext
             .WithMany(ga => ga.Suppliers)
             .HasForeignKey(s => s.ControlAccountId)
             .OnDelete(DeleteBehavior.SetNull);
-        // Configure Organisation relationship on Supplier to use NO ACTION to avoid cascade cycles
         modelBuilder.Entity<Supplier>()
             .HasOne(s => s.Organisation)
             .WithMany(o => o.Suppliers)
             .HasForeignKey(s => s.OrganisationId)
-            .OnDelete(DeleteBehavior.NoAction);
+            .OnDelete(DeleteBehavior.Cascade);
 
         // OrganisationInvitation configuration
         modelBuilder.Entity<OrganisationInvitation>().HasKey(i => i.Id);

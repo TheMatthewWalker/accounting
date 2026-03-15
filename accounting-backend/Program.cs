@@ -7,6 +7,9 @@ using AccountingApp.Services;
 using AccountingApp.Middleware;
 using Serilog;
 
+// Treat DateTime.Unspecified as UTC when writing to PostgreSQL (Npgsql 6+ breaking change)
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, configuration) =>
@@ -22,11 +25,13 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 // CORS Configuration
+var allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
+    ?? throw new InvalidOperationException("AllowedOrigins is not configured in appsettings.json");
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000", "https://localhost:3000")
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -35,13 +40,15 @@ builder.Services.AddCors(options =>
 
 // Database Configuration
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? "Server=.\\SQLEXPRESS;Database=AccountingDB;User Id=sa;Password=Rockware1210;TrustServerCertificate=true;";
+    ?? throw new InvalidOperationException("DefaultConnection is not configured in appsettings.json");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseNpgsql(connectionString));
 
 // JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = Encoding.ASCII.GetBytes(jwtSettings["SecretKey"] ?? "your-super-secret-key-change-in-production-12345");
+var secretKeyValue = jwtSettings["SecretKey"]
+    ?? throw new InvalidOperationException("JwtSettings:SecretKey is not configured in appsettings.json");
+var secretKey = Encoding.ASCII.GetBytes(secretKeyValue);
 
 builder.Services.AddAuthentication(options =>
 {

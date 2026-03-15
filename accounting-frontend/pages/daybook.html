@@ -620,6 +620,56 @@
                 detail.style.display = detail.style.display === 'none' ? '' : 'none';
         };
 
+        // ---- Edit journal line GL accounts ----
+        window.editJournalLines = (entryId) => {
+            const detailCell = document.querySelector(`[data-entry-detail="${entryId}"]`);
+            if (!detailCell) return;
+            detailCell.querySelectorAll('select.gl-edit-select').forEach(sel => {
+                sel.disabled = false;
+                sel.style.background = '';
+            });
+            detailCell.querySelector('.edit-journal-btn')?.remove();
+            const controls = detailCell.querySelector('.edit-journal-controls');
+            if (controls) controls.style.display = '';
+        };
+
+        window.saveJournalLines = async (entryId) => {
+            const orgId = ApiService.getSelectedOrg();
+            const detailCell = document.querySelector(`[data-entry-detail="${entryId}"]`);
+            if (!detailCell) return;
+            const selects = detailCell.querySelectorAll('select.gl-edit-select');
+            let anyError = false;
+            for (const sel of selects) {
+                const lineId = sel.dataset.lineId;
+                const newAccountId = sel.value;
+                if (newAccountId !== sel.dataset.originalValue) {
+                    const res = await ApiService.updateJournalLine(orgId, entryId, lineId, newAccountId);
+                    if (!res.ok) { UIUtils.showAlert(UIUtils.getErrorMessage(res.data), 'error'); anyError = true; break; }
+                }
+            }
+            if (!anyError) { UIUtils.showAlert('GL accounts updated', 'success'); loadEntries(); }
+        };
+
+        window.cancelJournalEdit = (entryId) => {
+            const detailCell = document.querySelector(`[data-entry-detail="${entryId}"]`);
+            if (!detailCell) return;
+            detailCell.querySelectorAll('select.gl-edit-select').forEach(sel => {
+                sel.value = sel.dataset.originalValue;
+                sel.disabled = true;
+                sel.style.background = 'transparent';
+            });
+            const controls = detailCell.querySelector('.edit-journal-controls');
+            if (controls) controls.style.display = 'none';
+            if (!detailCell.querySelector('.edit-journal-btn')) {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-sm edit-journal-btn';
+                btn.style.cssText = 'margin:6px 0 4px 8px;font-size:12px;';
+                btn.textContent = 'Edit GL Accounts';
+                btn.onclick = () => editJournalLines(entryId);
+                detailCell.querySelector('table')?.after(btn);
+            }
+        };
+
         // ---- Load data ----
         async function loadEntries() {
             const orgId = ApiService.getSelectedOrg();
@@ -686,11 +736,41 @@
                 const displayDesc = escHtml(entry.description || entityName || '-');
                 const subDesc = entry.description && entityName ? ` <span style="color:var(--secondary-color);font-size:12px;">(${escHtml(entityName)})</span>` : '';
                 const journalRows = (entry.lines || []).map(l => {
-                    const drCol = l.debitAmount  > 0 ? `<td style="text-align:right;color:#2e7d32;font-size:12px;">DR ${UIUtils.formatCurrency(l.debitAmount)}</td><td></td>` : `<td></td><td style="text-align:right;color:#c62828;font-size:12px;">CR ${UIUtils.formatCurrency(l.creditAmount)}</td>`;
-                    return `<tr><td style="padding-left:20px;font-size:12px;">↳ ${escHtml(l.glAccountName)}</td><td style="font-size:12px;color:var(--secondary-color);">${escHtml(l.narrationLine||'')}</td>${drCol}</tr>`;
+                    const drCol = l.debitAmount > 0
+                        ? `<td style="text-align:right;color:#2e7d32;font-size:12px;">DR ${UIUtils.formatCurrency(l.debitAmount)}</td><td></td>`
+                        : `<td></td><td style="text-align:right;color:#c62828;font-size:12px;">CR ${UIUtils.formatCurrency(l.creditAmount)}</td>`;
+                    if (!entry.isPosted) {
+                        const opts = glAccounts.map(a =>
+                            `<option value="${a.id}"${a.id === l.glAccountId ? ' selected' : ''}>${escHtml(a.code)} — ${escHtml(a.name)}</option>`
+                        ).join('');
+                        return `<tr>
+                            <td style="padding-left:12px;">
+                                <select class="gl-edit-select" data-line-id="${l.id}" data-original-value="${l.glAccountId}"
+                                    style="font-size:12px;border:1px solid var(--border-color);border-radius:4px;padding:3px 6px;background:transparent;cursor:default;width:100%;" disabled>
+                                    ${opts}
+                                </select>
+                            </td>
+                            <td style="font-size:12px;color:var(--secondary-color);">${escHtml(l.narrationLine||'')}</td>
+                            ${drCol}
+                        </tr>`;
+                    }
+                    return `<tr>
+                        <td style="padding-left:20px;font-size:12px;">↳ ${escHtml(l.glAccountName)}</td>
+                        <td style="font-size:12px;color:var(--secondary-color);">${escHtml(l.narrationLine||'')}</td>
+                        ${drCol}
+                    </tr>`;
                 }).join('');
+                const editControls = !entry.isPosted ? `
+                    <button class="btn btn-sm edit-journal-btn" onclick="editJournalLines('${entry.id}')" style="margin:6px 0 4px 8px;font-size:12px;">Edit GL Accounts</button>
+                    <span class="edit-journal-controls" style="display:none;margin:6px 0 4px 8px;">
+                        <button class="btn btn-sm btn-success" onclick="saveJournalLines('${entry.id}')" style="font-size:12px;">Save</button>
+                        <button class="btn btn-sm" onclick="cancelJournalEdit('${entry.id}')" style="font-size:12px;margin-left:4px;">Cancel</button>
+                    </span>` : '';
                 const detailContent = entry.lines?.length
-                    ? `<table style="width:100%;border-collapse:collapse;background:#f8f9fa;border-top:1px solid var(--border-color);">${journalRows}</table>` : '';
+                    ? `<div data-entry-detail="${entry.id}" style="background:#f8f9fa;border-top:1px solid var(--border-color);padding-bottom:4px;">
+                        <table style="width:100%;border-collapse:collapse;">${journalRows}</table>
+                        ${editControls}
+                       </div>` : '';
                 return `
                     <tr onclick="toggleJournalLines(this)" style="cursor:pointer;" title="Click to view journal entries">
                         <td>${UIUtils.formatDate(entry.entryDate)}</td>
