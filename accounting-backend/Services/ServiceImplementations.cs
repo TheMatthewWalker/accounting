@@ -1276,7 +1276,7 @@ public class DaybookService : IDaybookService
             _context.DaybookSequences.Add(seq);
         }
         seq.LastNumber++;
-        return $"{prefix}-{seq.LastNumber:D4}";
+        return $"{prefix}-{seq.LastNumber:D8}";
     }
 
     private async Task<DaybookEntry> BuildDaybookEntryAsync(Guid organisationId, string type, string? externalReference, DateTime entryDate, string? description, Guid? customerId, Guid? supplierId)
