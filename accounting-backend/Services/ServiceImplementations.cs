@@ -1275,7 +1275,14 @@ public class DaybookService : IDaybookService
         if (org == null)
             throw new ResourceNotFoundException("Organisation", organisationId.ToString());
 
-        if (org.SubscriptionTier != "Free")
+        int? limit = org.SubscriptionTier switch
+        {
+            "Enterprise" => null,
+            "Pro"        => 1000,
+            _            => 50,   // Free
+        };
+
+        if (limit == null)
             return;
 
         var now = DateTime.UtcNow;
@@ -1287,10 +1294,12 @@ public class DaybookService : IDaybookService
                           && e.CreatedAt >= monthStart
                           && e.CreatedAt < monthEnd);
 
-        if (count >= 50)
+        if (count >= limit)
             throw new BusinessRuleException(
-                "Free plan organisations are limited to 50 daybook entries per month. " +
-                "Upgrade to a paid plan to create unlimited entries.");
+                $"{org.SubscriptionTier} plan organisations are limited to {limit} daybook entries per month. " +
+                (org.SubscriptionTier == "Free"
+                    ? "Upgrade to Pro (1,000/month) or Enterprise (unlimited) to continue."
+                    : "Upgrade to Enterprise for unlimited entries."));
     }
 
     private async Task<string> NextInternalReferenceAsync(Guid organisationId, string entryType)
