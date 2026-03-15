@@ -1056,6 +1056,14 @@ public class DaybookService : IDaybookService
         if (request.EntryDate.Date > DateTime.UtcNow.Date)
             throw new ValidationException("Entry date cannot be in the future.");
 
+        if (request.LinkedDaybookEntryId.HasValue)
+        {
+            var originalExists = await _context.DaybookEntries
+                .AnyAsync(e => e.Id == request.LinkedDaybookEntryId.Value && e.OrganisationId == organisationId && e.Type == "Sales");
+            if (!originalExists)
+                throw new ResourceNotFoundException("Linked Sales Entry", request.LinkedDaybookEntryId.Value.ToString());
+        }
+
         var (org, arAccountId, vatAccountId) = await ResolveOrgDefaults(organisationId, "1100");
         var lines = await ResolveSimpleLines(organisationId, request.Lines, org, "4100");
         decimal total = lines.Sum(l => l.netAmount + l.vatAmount);
@@ -1077,6 +1085,7 @@ public class DaybookService : IDaybookService
         }
 
         var entry = BuildDaybookEntry(organisationId, "SalesReturn", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        entry.LinkedDaybookEntryId = request.LinkedDaybookEntryId;
         _context.DaybookEntries.Add(entry);
         AddJournalLine(entry.Id, creditAccountId, credit: total, narration: request.Description);
         foreach (var (accountId, desc, netAmount, vatAmount) in lines)
@@ -1132,6 +1141,14 @@ public class DaybookService : IDaybookService
         if (request.EntryDate.Date > DateTime.UtcNow.Date)
             throw new ValidationException("Entry date cannot be in the future.");
 
+        if (request.LinkedDaybookEntryId.HasValue)
+        {
+            var originalExists = await _context.DaybookEntries
+                .AnyAsync(e => e.Id == request.LinkedDaybookEntryId.Value && e.OrganisationId == organisationId && e.Type == "Purchase");
+            if (!originalExists)
+                throw new ResourceNotFoundException("Linked Purchase Entry", request.LinkedDaybookEntryId.Value.ToString());
+        }
+
         var (org, apAccountId, vatAccountId) = await ResolveOrgDefaults(organisationId, "2000");
         var lines = await ResolveSimpleLines(organisationId, request.Lines, org, "5100");
         decimal total = lines.Sum(l => l.netAmount + l.vatAmount);
@@ -1153,6 +1170,7 @@ public class DaybookService : IDaybookService
         }
 
         var entry = BuildDaybookEntry(organisationId, "PurchaseReturn", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        entry.LinkedDaybookEntryId = request.LinkedDaybookEntryId;
         _context.DaybookEntries.Add(entry);
         AddJournalLine(entry.Id, debitAccountId, debit: total, narration: request.Description);
         foreach (var (accountId, desc, netAmount, vatAmount) in lines)

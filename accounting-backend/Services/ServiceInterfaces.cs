@@ -672,6 +672,8 @@ public class SimpleInvoiceRequest
     // Immediate payment: bypasses AR/AP — the chosen asset account is used directly
     public bool ImmediatePayment { get; set; } = false;
     public Guid? ImmediatePaymentAccountId { get; set; }
+    // For returns: link back to the original sales/purchase entry
+    public Guid? LinkedDaybookEntryId { get; set; }
     [Required]
     [MinLength(1, ErrorMessage = "At least 1 line is required")]
     public List<SimpleInvoiceLine> Lines { get; set; } = new();

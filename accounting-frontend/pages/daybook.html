@@ -110,6 +110,12 @@
             <!-- SALES RETURN FORM -->
             <div id="form-sales-return" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Sales Return / Credit Note</h3>
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label style="font-size:13px; font-weight:600;">Original Sales Invoice *</label>
+                    <select id="sales-return-original" style="width:100%; margin-top:4px;" onchange="onOriginalSalesSelected()">
+                        <option value="">Select the original sales invoice to return against…</option>
+                    </select>
+                </div>
                 <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Payment Method</label>
                 <div class="payment-method-toggle" style="margin-bottom:12px;">
                     <button class="active" onclick="setPaymentMethod('sales-return','credit')">Credit (Credit Note)</button>
@@ -198,6 +204,12 @@
             <!-- PURCHASE RETURN FORM -->
             <div id="form-purchase-return" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Purchase Return / Debit Note</h3>
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label style="font-size:13px; font-weight:600;">Original Purchase Invoice *</label>
+                    <select id="purchase-return-original" style="width:100%; margin-top:4px;" onchange="onOriginalPurchaseSelected()">
+                        <option value="">Select the original purchase invoice to return against…</option>
+                    </select>
+                </div>
                 <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Payment Method</label>
                 <div class="payment-method-toggle" style="margin-bottom:12px;">
                     <button class="active" onclick="setPaymentMethod('purchase-return','credit')">Credit (Debit Note)</button>
@@ -372,6 +384,7 @@
         let customers = [];
         let suppliers = [];
         let products = [];
+        let daybookEntries = [];
         let orgVatSettings = { defaultVatAccountId: null, vatReducedRate: 5, vatFullRate: 20 };
 
         function escHtml(str) {
@@ -438,14 +451,25 @@
             document.getElementById(`form-${type}`).style.display = 'block';
             document.getElementById(`form-${type}`).scrollIntoView({ behavior: 'smooth' });
             if (type === 'sales' && document.getElementById('sales-lines').children.length === 0) window.addSalesLine();
-            if (type === 'sales-return' && document.getElementById('sales-return-lines').children.length === 0) window.addSalesReturnLine();
+            // Returns: don't pre-add a blank line — lines are populated when original is selected
             if (type === 'purchase' && document.getElementById('purchase-lines').children.length === 0) window.addPurchLine();
-            if (type === 'purchase-return' && document.getElementById('purchase-return-lines').children.length === 0) window.addPurchReturnLine();
         };
         window.hideForm = (type) => {
             document.getElementById(`form-${type}`).style.display = 'none';
-            // Reset payment method to credit when form is closed
             if (paymentMethods[type] !== undefined) setPaymentMethod(type, 'credit');
+            // Reset original invoice/bill selectors and clear pre-populated lines
+            if (type === 'sales-return') {
+                const sel = document.getElementById('sales-return-original');
+                if (sel) sel.value = '';
+                document.getElementById('sales-return-lines').innerHTML = '';
+                srCount = 0;
+            }
+            if (type === 'purchase-return') {
+                const sel = document.getElementById('purchase-return-original');
+                if (sel) sel.value = '';
+                document.getElementById('purchase-return-lines').innerHTML = '';
+                prCount = 0;
+            }
         };
 
         // ---- Account options helpers ----
@@ -563,6 +587,104 @@
             return lines;
         }
 
+        // ---- Populate original invoice/bill selects ----
+        function populateOriginalSelects() {
+            const fmtEntry = (e, nameField) => {
+                const label = [e.referenceNumber, e[nameField] || e.description].filter(Boolean).join(' — ');
+                return `<option value="${e.id}">${escHtml(label)} (${UIUtils.formatDate(e.entryDate)})</option>`;
+            };
+            const salesOpts = daybookEntries.filter(e => e.type === 'Sales').map(e => fmtEntry(e, 'customerName')).join('');
+            document.getElementById('sales-return-original').innerHTML =
+                '<option value="">Select the original sales invoice to return against…</option>' + salesOpts;
+
+            const purchOpts = daybookEntries.filter(e => e.type === 'Purchase').map(e => fmtEntry(e, 'supplierName')).join('');
+            document.getElementById('purchase-return-original').innerHTML =
+                '<option value="">Select the original purchase invoice to return against…</option>' + purchOpts;
+        }
+
+        // Parse revenue/expense lines from an original entry's journal lines.
+        // "primary" lines are the non-AR/AP side (the CR lines for sales, DR lines for purchases).
+        // VAT lines are identified by narrationLine starting with "VAT on ".
+        function parseOriginalLines(entry, primarySide) {
+            // primarySide: 'credit' for sales (find CR lines), 'debit' for purchases (find DR lines)
+            const isCredit = primarySide === 'credit';
+            const primaryLines = (entry.lines || []).filter(l =>
+                isCredit ? l.creditAmount > 0 : l.debitAmount > 0
+            );
+            const vatLines = primaryLines.filter(l => l.narrationLine?.startsWith('VAT on '));
+            const revLines = primaryLines.filter(l => !l.narrationLine?.startsWith('VAT on '));
+
+            return revLines.map(rev => {
+                const netAmount = isCredit ? rev.creditAmount : rev.debitAmount;
+                const vatNarration = `VAT on ${rev.narrationLine}`;
+                const vatLine = vatLines.find(v => v.narrationLine === vatNarration);
+                const vatAmount = vatLine ? (isCredit ? vatLine.creditAmount : vatLine.debitAmount) : 0;
+
+                let vatTreatment = 'exempt';
+                if (vatAmount > 0 && netAmount > 0) {
+                    const rate = Math.round(vatAmount / netAmount * 100);
+                    if (rate === orgVatSettings.vatFullRate) vatTreatment = 'standard';
+                    else if (rate === orgVatSettings.vatReducedRate) vatTreatment = 'reduced';
+                    else vatTreatment = 'zero';
+                }
+                return { description: rev.narrationLine || '', unitPrice: netAmount, vatTreatment };
+            });
+        }
+
+        function prefillReturnForm(formPrefix, entry, entityType, addLineFn, updateFn, priceField, lineSuffix) {
+            // Customer/supplier
+            const entSel = document.getElementById(`${formPrefix}-${entityType}`);
+            if (entSel && entry[`${entityType}Id`]) {
+                entSel.value = entry[`${entityType}Id`];
+            }
+            // Date (today)
+            document.getElementById(`${formPrefix}-date`).value = new Date().toISOString().split('T')[0];
+            // Reference
+            const origRef = entry.referenceNumber || '';
+            document.getElementById(`${formPrefix}-ref`).value = origRef ? `${formPrefix === 'sales-return' ? 'CN' : 'DN'}-${origRef}` : '';
+            // Description
+            document.getElementById(`${formPrefix}-desc`).value = entry.description ? `Return: ${entry.description}` : '';
+
+            // Lines
+            const tbody = document.getElementById(`${formPrefix}-lines`);
+            tbody.innerHTML = '';
+            const parsed = parseOriginalLines(entry, formPrefix === 'sales-return' ? 'credit' : 'debit');
+
+            if (parsed.length === 0) {
+                // Fallback: one line with total debit amount
+                addLineFn();
+            } else {
+                parsed.forEach(({ description, unitPrice, vatTreatment }, idx) => {
+                    addLineFn();
+                    // The line was inserted at the end — find last row
+                    const rows = tbody.querySelectorAll('tr');
+                    const row = rows[rows.length - 1];
+                    if (row) {
+                        row.querySelector('input[type=text]').value = description;
+                        row.querySelector('.price').value = unitPrice.toFixed(2);
+                        row.querySelector('.vat-sel').value = vatTreatment;
+                    }
+                });
+            }
+            window[updateFn]();
+        }
+
+        window.onOriginalSalesSelected = () => {
+            const entryId = document.getElementById('sales-return-original').value;
+            if (!entryId) return;
+            const entry = daybookEntries.find(e => e.id === entryId);
+            if (!entry) return;
+            prefillReturnForm('sales-return', entry, 'customer', window.addSalesReturnLine, 'updateSalesReturnTotal', 'sale', 'sr');
+        };
+
+        window.onOriginalPurchaseSelected = () => {
+            const entryId = document.getElementById('purchase-return-original').value;
+            if (!entryId) return;
+            const entry = daybookEntries.find(e => e.id === entryId);
+            if (!entry) return;
+            prefillReturnForm('purchase-return', entry, 'supplier', window.addPurchReturnLine, 'updatePurchReturnTotal', 'purchase', 'pr');
+        };
+
         // ---- Submit simple invoice ----
         window.submitSimple = async (formType) => {
             const orgId = ApiService.getSelectedOrg();
@@ -604,11 +726,22 @@
             const lines = buildSimpleLines(tbodyId, priceField);
             if (lines.length === 0) { UIUtils.showAlert('Add at least one line with qty and price', 'error'); return; }
 
+            // For return types, require and include the original entry link
+            let linkedDaybookEntryId = null;
+            if (formType === 'sales-return') {
+                linkedDaybookEntryId = document.getElementById('sales-return-original')?.value || null;
+                if (!linkedDaybookEntryId) { UIUtils.showAlert('Please select the original sales invoice', 'error'); return; }
+            } else if (formType === 'purchase-return') {
+                linkedDaybookEntryId = document.getElementById('purchase-return-original')?.value || null;
+                if (!linkedDaybookEntryId) { UIUtils.showAlert('Please select the original purchase invoice', 'error'); return; }
+            }
+
             const payload = {
                 entryDate: date,
                 referenceNumber: document.getElementById(`${formType}-ref`)?.value || null,
                 description: document.getElementById(`${formType}-desc`)?.value || null,
                 ...entityPayload,
+                ...(linkedDaybookEntryId ? { linkedDaybookEntryId } : {}),
                 lines
             };
 
@@ -841,6 +974,8 @@
 
             if (!entriesRes.ok) return;
             const entries = entriesRes.data;
+            daybookEntries = entries;
+            populateOriginalSelects();
             const tbody = document.getElementById('entriesTable');
             if (entries.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No entries yet. Use the buttons above to create one.</td></tr>';
