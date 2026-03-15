@@ -17,6 +17,10 @@
         .form-hint { font-size: 12px; color: var(--secondary-color); margin-bottom: 15px; padding: 8px 12px; background: #e8f4f8; border-radius: 4px; border-left: 3px solid var(--primary-color); }
         .section-divider { border: none; border-top: 1px solid var(--border-color); margin: 20px 0; }
         .adv-toggle { font-size: 12px; color: var(--primary-color); cursor: pointer; text-decoration: underline; }
+        .payment-method-toggle { display: flex; gap: 0; margin-bottom: 15px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color); width: fit-content; }
+        .payment-method-toggle button { padding: 7px 16px; border: none; background: white; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--secondary-color); transition: background 0.15s, color 0.15s; }
+        .payment-method-toggle button.active { background: var(--primary-color); color: white; }
+        .payment-method-toggle button:not(:last-child) { border-right: 1px solid var(--border-color); }
     </style>
 </head>
 <body>
@@ -62,11 +66,20 @@
             <!-- SALES INVOICE FORM -->
             <div id="form-sales" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Sales Invoice</h3>
-                <p class="form-hint">Accounts Receivable is debited automatically. Credits go to your Sales account. VAT is handled via your VAT Control account.</p>
+                <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Payment Method</label>
+                <div class="payment-method-toggle" style="margin-bottom:12px;">
+                    <button class="active" onclick="setPaymentMethod('sales','credit')">Credit (Invoice)</button>
+                    <button onclick="setPaymentMethod('sales','immediate')">Immediate Payment</button>
+                </div>
+                <p class="form-hint" id="sales-hint">Accounts Receivable is debited automatically. Credits go to your Sales account. VAT is handled via your VAT Control account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                    <div class="form-group">
-                        <label>Customer *</label>
+                    <div class="form-group" id="sales-customer-group">
+                        <label id="sales-customer-label">Customer *</label>
                         <select id="sales-customer"><option value="">Select customer</option></select>
+                    </div>
+                    <div class="form-group" id="sales-payment-account-group" style="display:none;">
+                        <label>Payment Account * <span style="font-weight:400;color:var(--secondary-color)">(cash / bank)</span></label>
+                        <select id="sales-payment-account"><option value="">Select asset account</option></select>
                     </div>
                     <div class="form-group">
                         <label>Invoice Date *</label>
@@ -97,11 +110,20 @@
             <!-- SALES RETURN FORM -->
             <div id="form-sales-return" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Sales Return / Credit Note</h3>
-                <p class="form-hint">Reduces what the customer owes (credits Accounts Receivable). Debits the Sales Returns account.</p>
+                <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Payment Method</label>
+                <div class="payment-method-toggle" style="margin-bottom:12px;">
+                    <button class="active" onclick="setPaymentMethod('sales-return','credit')">Credit (Credit Note)</button>
+                    <button onclick="setPaymentMethod('sales-return','immediate')">Immediate Refund</button>
+                </div>
+                <p class="form-hint" id="sales-return-hint">Reduces what the customer owes (credits Accounts Receivable). Debits the Sales Returns account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                    <div class="form-group">
-                        <label>Customer *</label>
+                    <div class="form-group" id="sales-return-customer-group">
+                        <label id="sales-return-customer-label">Customer *</label>
                         <select id="sales-return-customer"><option value="">Select customer</option></select>
+                    </div>
+                    <div class="form-group" id="sales-return-payment-account-group" style="display:none;">
+                        <label>Refund Account * <span style="font-weight:400;color:var(--secondary-color)">(cash / bank)</span></label>
+                        <select id="sales-return-payment-account"><option value="">Select asset account</option></select>
                     </div>
                     <div class="form-group">
                         <label>Date *</label>
@@ -132,11 +154,20 @@
             <!-- PURCHASE INVOICE FORM -->
             <div id="form-purchase" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Purchase Invoice</h3>
-                <p class="form-hint">Trade Payables is credited automatically. Debits go to your Purchases account. VAT is reclaimed via your VAT Control account.</p>
+                <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Payment Method</label>
+                <div class="payment-method-toggle" style="margin-bottom:12px;">
+                    <button class="active" onclick="setPaymentMethod('purchase','credit')">Credit (Invoice)</button>
+                    <button onclick="setPaymentMethod('purchase','immediate')">Immediate Payment</button>
+                </div>
+                <p class="form-hint" id="purchase-hint">Trade Payables is credited automatically. Debits go to your Purchases account. VAT is reclaimed via your VAT Control account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                    <div class="form-group">
-                        <label>Supplier *</label>
+                    <div class="form-group" id="purchase-supplier-group">
+                        <label id="purchase-supplier-label">Supplier *</label>
                         <select id="purchase-supplier"><option value="">Select supplier</option></select>
+                    </div>
+                    <div class="form-group" id="purchase-payment-account-group" style="display:none;">
+                        <label>Payment Account * <span style="font-weight:400;color:var(--secondary-color)">(cash / bank)</span></label>
+                        <select id="purchase-payment-account"><option value="">Select asset account</option></select>
                     </div>
                     <div class="form-group">
                         <label>Invoice Date *</label>
@@ -167,11 +198,20 @@
             <!-- PURCHASE RETURN FORM -->
             <div id="form-purchase-return" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Purchase Return / Debit Note</h3>
-                <p class="form-hint">Reduces what you owe the supplier (debits Trade Payables). Credits go to your Purchase Returns account.</p>
+                <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Payment Method</label>
+                <div class="payment-method-toggle" style="margin-bottom:12px;">
+                    <button class="active" onclick="setPaymentMethod('purchase-return','credit')">Credit (Debit Note)</button>
+                    <button onclick="setPaymentMethod('purchase-return','immediate')">Immediate Refund</button>
+                </div>
+                <p class="form-hint" id="purchase-return-hint">Reduces what you owe the supplier (debits Trade Payables). Credits go to your Purchase Returns account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                    <div class="form-group">
-                        <label>Supplier *</label>
+                    <div class="form-group" id="purchase-return-supplier-group">
+                        <label id="purchase-return-supplier-label">Supplier *</label>
                         <select id="purchase-return-supplier"><option value="">Select supplier</option></select>
+                    </div>
+                    <div class="form-group" id="purchase-return-payment-account-group" style="display:none;">
+                        <label>Refund Account * <span style="font-weight:400;color:var(--secondary-color)">(cash / bank)</span></label>
+                        <select id="purchase-return-payment-account"><option value="">Select asset account</option></select>
                     </div>
                     <div class="form-group">
                         <label>Date *</label>
@@ -338,6 +378,60 @@
             return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
 
+        // ---- Payment method state ----
+        const paymentMethods = { 'sales': 'credit', 'sales-return': 'credit', 'purchase': 'credit', 'purchase-return': 'credit' };
+
+        const paymentHints = {
+            sales: {
+                credit:    'Accounts Receivable is debited automatically. Credits go to your Sales account. VAT is handled via your VAT Control account.',
+                immediate: 'Immediate payment: the chosen asset account (e.g. Bank or Cash) is debited directly. No AR entry is created. Credits go to your Sales account.'
+            },
+            'sales-return': {
+                credit:    'Reduces what the customer owes (credits Accounts Receivable). Debits the Sales Returns account.',
+                immediate: 'Immediate refund: the chosen asset account (e.g. Bank or Cash) is credited directly. No AR entry is created. Debits go to your Sales Returns account.'
+            },
+            purchase: {
+                credit:    'Trade Payables is credited automatically. Debits go to your Purchases account. VAT is reclaimed via your VAT Control account.',
+                immediate: 'Immediate payment: the chosen asset account (e.g. Bank or Cash) is credited directly. No AP entry is created. Debits go to your Purchases account.'
+            },
+            'purchase-return': {
+                credit:    'Reduces what you owe the supplier (debits Trade Payables). Credits go to your Purchase Returns account.',
+                immediate: 'Immediate refund: the chosen asset account (e.g. Bank or Cash) is debited directly. No AP entry is created. Credits go to your Purchase Returns account.'
+            }
+        };
+
+        window.setPaymentMethod = (formType, method) => {
+            paymentMethods[formType] = method;
+            const isSale = formType === 'sales' || formType === 'sales-return';
+            const entityType = isSale ? 'customer' : 'supplier';
+            const prefix = formType; // e.g. 'sales', 'purchase-return'
+
+            // Toggle buttons
+            const toggle = document.querySelector(`#form-${formType} .payment-method-toggle`);
+            if (toggle) toggle.querySelectorAll('button').forEach((btn, i) => {
+                btn.classList.toggle('active', (i === 0 && method === 'credit') || (i === 1 && method === 'immediate'));
+            });
+
+            // Update hint
+            const hintEl = document.getElementById(`${prefix}-hint`);
+            if (hintEl) hintEl.textContent = paymentHints[formType][method];
+
+            // Show/hide entity (customer/supplier) vs payment account fields
+            const entityGroup = document.getElementById(`${prefix}-${entityType}-group`);
+            const payGroup = document.getElementById(`${prefix}-payment-account-group`);
+            const entityLabel = document.getElementById(`${prefix}-${entityType}-label`);
+
+            if (method === 'immediate') {
+                if (entityGroup) entityGroup.style.display = 'none';
+                if (payGroup) payGroup.style.display = '';
+            } else {
+                if (entityGroup) entityGroup.style.display = '';
+                if (payGroup) payGroup.style.display = 'none';
+                // Restore required label
+                if (entityLabel) entityLabel.textContent = `${isSale ? 'Customer' : 'Supplier'} *`;
+            }
+        };
+
         // ---- Form show/hide ----
         window.showForm = (type) => {
             document.querySelectorAll('.entry-form').forEach(f => f.style.display = 'none');
@@ -350,6 +444,8 @@
         };
         window.hideForm = (type) => {
             document.getElementById(`form-${type}`).style.display = 'none';
+            // Reset payment method to credit when form is closed
+            if (paymentMethods[type] !== undefined) setPaymentMethod(type, 'credit');
         };
 
         // ---- Account options helpers ----
@@ -473,13 +569,34 @@
             if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
 
             const isSale = formType === 'sales' || formType === 'sales-return';
-            const entityId = isSale
-                ? document.getElementById(`${formType}-customer`)?.value
-                : document.getElementById(`${formType}-supplier`)?.value;
+            const method = paymentMethods[formType] || 'credit';
+            const isImmediate = method === 'immediate';
+
             const date = document.getElementById(`${formType}-date`).value;
-            if (!entityId || !date) {
-                UIUtils.showAlert(`${isSale ? 'Customer' : 'Supplier'} and date are required`, 'error');
-                return;
+            if (!date) { UIUtils.showAlert('Date is required', 'error'); return; }
+
+            let entityPayload = {};
+            if (isImmediate) {
+                const paymentAccountId = document.getElementById(`${formType}-payment-account`)?.value;
+                if (!paymentAccountId) {
+                    UIUtils.showAlert('Payment account is required for immediate payment', 'error');
+                    return;
+                }
+                entityPayload = { immediatePayment: true, immediatePaymentAccountId: paymentAccountId };
+                // Optionally include customer/supplier if selected (for record-keeping)
+                const entityId = isSale
+                    ? document.getElementById(`${formType}-customer`)?.value
+                    : document.getElementById(`${formType}-supplier`)?.value;
+                if (entityId) entityPayload = { ...entityPayload, ...(isSale ? { customerId: entityId } : { supplierId: entityId }) };
+            } else {
+                const entityId = isSale
+                    ? document.getElementById(`${formType}-customer`)?.value
+                    : document.getElementById(`${formType}-supplier`)?.value;
+                if (!entityId) {
+                    UIUtils.showAlert(`${isSale ? 'Customer' : 'Supplier'} is required for credit payment`, 'error');
+                    return;
+                }
+                entityPayload = { immediatePayment: false, ...(isSale ? { customerId: entityId } : { supplierId: entityId }) };
             }
 
             const tbodyId = `${formType}-lines`;
@@ -491,7 +608,7 @@
                 entryDate: date,
                 referenceNumber: document.getElementById(`${formType}-ref`)?.value || null,
                 description: document.getElementById(`${formType}-desc`)?.value || null,
-                ...(isSale ? { customerId: entityId } : { supplierId: entityId }),
+                ...entityPayload,
                 lines
             };
 
@@ -698,6 +815,11 @@
                 populateSelect('rcpt-credit', allOpts());
                 populateSelect('pay-bank', assetOpts());
                 populateSelect('pay-debit', allOpts());
+                // Immediate payment asset account selects
+                populateSelect('sales-payment-account', assetOpts());
+                populateSelect('sales-return-payment-account', assetOpts());
+                populateSelect('purchase-payment-account', assetOpts());
+                populateSelect('purchase-return-payment-account', assetOpts());
             }
 
             if (prodRes.ok) products = prodRes.data;

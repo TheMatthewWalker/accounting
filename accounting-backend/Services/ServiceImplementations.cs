@@ -601,33 +601,52 @@ public class DaybookService : IDaybookService
         if (request.EntryDate.Date > DateTime.UtcNow.Date)
             throw new ValidationException("Entry date cannot be in the future.");
 
-        // Resolve the Accounts Receivable account
-        Guid receivableAccountId;
         Guid? customerId = null;
+        Guid debitAccountId; // AR account (credit) or immediate payment asset account
 
-        if (request.CustomerId.HasValue)
+        if (request.ImmediatePayment)
         {
-            var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
-            if (customer == null)
-                throw new ResourceNotFoundException("Customer", request.CustomerId.Value.ToString());
-            customerId = customer.Id;
-            if (customer.ControlAccountId.HasValue)
-                receivableAccountId = customer.ControlAccountId.Value;
-            else if (request.ReceivableAccountId.HasValue)
-                receivableAccountId = request.ReceivableAccountId.Value;
-            else
-                throw new ValidationException("The specified customer has no control account linked. Please provide a ReceivableAccountId.");
-        }
-        else if (request.ReceivableAccountId.HasValue)
-        {
-            receivableAccountId = request.ReceivableAccountId.Value;
+            // Immediate payment: debit the chosen asset account directly — no AR involvement
+            if (!request.ImmediatePaymentAccountId.HasValue)
+                throw new ValidationException("ImmediatePaymentAccountId is required when ImmediatePayment is true.");
+            await ValidateGLAccount(request.ImmediatePaymentAccountId.Value, "Payment");
+            debitAccountId = request.ImmediatePaymentAccountId.Value;
+
+            // Customer is optional for record-keeping only
+            if (request.CustomerId.HasValue)
+            {
+                var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
+                if (customer == null)
+                    throw new ResourceNotFoundException("Customer", request.CustomerId.Value.ToString());
+                customerId = customer.Id;
+            }
         }
         else
         {
-            throw new ValidationException("Either CustomerId (with a linked AR account) or ReceivableAccountId must be specified.");
+            // Credit sale: resolve the Accounts Receivable account
+            if (request.CustomerId.HasValue)
+            {
+                var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
+                if (customer == null)
+                    throw new ResourceNotFoundException("Customer", request.CustomerId.Value.ToString());
+                customerId = customer.Id;
+                if (customer.ControlAccountId.HasValue)
+                    debitAccountId = customer.ControlAccountId.Value;
+                else if (request.ReceivableAccountId.HasValue)
+                    debitAccountId = request.ReceivableAccountId.Value;
+                else
+                    throw new ValidationException("The specified customer has no control account linked. Please provide a ReceivableAccountId.");
+            }
+            else if (request.ReceivableAccountId.HasValue)
+            {
+                debitAccountId = request.ReceivableAccountId.Value;
+            }
+            else
+            {
+                throw new ValidationException("Either CustomerId (with a linked AR account) or ReceivableAccountId must be specified.");
+            }
+            await ValidateGLAccount(debitAccountId, "Receivable");
         }
-
-        await ValidateGLAccount(receivableAccountId, "Receivable");
 
         bool hasVat = request.Lines.Any(l => l.VatAmount > 0);
         if (hasVat && !request.VatAccountId.HasValue)
@@ -643,8 +662,8 @@ public class DaybookService : IDaybookService
         var entry = BuildDaybookEntry(organisationId, "Sales", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
         _context.DaybookEntries.Add(entry);
 
-        // DR Receivable for the full invoice total
-        AddJournalLine(entry.Id, receivableAccountId, debit: totalAmount, narration: request.Description);
+        // DR Receivable (credit) or payment asset account (immediate) for the full invoice total
+        AddJournalLine(entry.Id, debitAccountId, debit: totalAmount, narration: request.Description);
 
         // CR Revenue (and VAT) per line
         foreach (var line in request.Lines)
@@ -655,7 +674,7 @@ public class DaybookService : IDaybookService
         }
 
         await _context.SaveChangesAsync();
-        _logger.LogInformation("Sales daybook entry {EntryId} created for organisation {OrganisationId}", entry.Id, organisationId);
+        _logger.LogInformation("Sales daybook entry {EntryId} created for organisation {OrganisationId} (immediatePayment: {Immediate})", entry.Id, organisationId, request.ImmediatePayment);
         return await MapToDaybookResponse(entry);
     }
 
@@ -666,31 +685,49 @@ public class DaybookService : IDaybookService
         if (request.EntryDate.Date > DateTime.UtcNow.Date)
             throw new ValidationException("Entry date cannot be in the future.");
 
-        Guid receivableAccountId;
         Guid? customerId = null;
+        Guid creditAccountId; // AR account (credit) or immediate payment asset account (cash/bank refunded)
 
-        if (request.CustomerId.HasValue)
+        if (request.ImmediatePayment)
         {
-            var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
-            if (customer == null) throw new ResourceNotFoundException("Customer", request.CustomerId.Value.ToString());
-            customerId = customer.Id;
-            if (customer.ControlAccountId.HasValue)
-                receivableAccountId = customer.ControlAccountId.Value;
-            else if (request.ReceivableAccountId.HasValue)
-                receivableAccountId = request.ReceivableAccountId.Value;
-            else
-                throw new ValidationException("The specified customer has no control account linked. Please provide a ReceivableAccountId.");
-        }
-        else if (request.ReceivableAccountId.HasValue)
-        {
-            receivableAccountId = request.ReceivableAccountId.Value;
+            // Immediate refund: credit the chosen asset account directly — no AR involvement
+            if (!request.ImmediatePaymentAccountId.HasValue)
+                throw new ValidationException("ImmediatePaymentAccountId is required when ImmediatePayment is true.");
+            await ValidateGLAccount(request.ImmediatePaymentAccountId.Value, "Payment");
+            creditAccountId = request.ImmediatePaymentAccountId.Value;
+
+            if (request.CustomerId.HasValue)
+            {
+                var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
+                if (customer == null) throw new ResourceNotFoundException("Customer", request.CustomerId.Value.ToString());
+                customerId = customer.Id;
+            }
         }
         else
         {
-            throw new ValidationException("Either CustomerId (with a linked AR account) or ReceivableAccountId must be specified.");
+            // Credit note: resolve the Accounts Receivable account
+            if (request.CustomerId.HasValue)
+            {
+                var customer = await _context.Customers.FindAsync(request.CustomerId.Value);
+                if (customer == null) throw new ResourceNotFoundException("Customer", request.CustomerId.Value.ToString());
+                customerId = customer.Id;
+                if (customer.ControlAccountId.HasValue)
+                    creditAccountId = customer.ControlAccountId.Value;
+                else if (request.ReceivableAccountId.HasValue)
+                    creditAccountId = request.ReceivableAccountId.Value;
+                else
+                    throw new ValidationException("The specified customer has no control account linked. Please provide a ReceivableAccountId.");
+            }
+            else if (request.ReceivableAccountId.HasValue)
+            {
+                creditAccountId = request.ReceivableAccountId.Value;
+            }
+            else
+            {
+                throw new ValidationException("Either CustomerId (with a linked AR account) or ReceivableAccountId must be specified.");
+            }
+            await ValidateGLAccount(creditAccountId, "Receivable");
         }
-
-        await ValidateGLAccount(receivableAccountId, "Receivable");
 
         bool hasVat = request.Lines.Any(l => l.VatAmount > 0);
         if (hasVat && !request.VatAccountId.HasValue)
@@ -706,8 +743,8 @@ public class DaybookService : IDaybookService
         var entry = BuildDaybookEntry(organisationId, "SalesReturn", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
         _context.DaybookEntries.Add(entry);
 
-        // CR Receivable (reduce what customer owes)
-        AddJournalLine(entry.Id, receivableAccountId, credit: totalAmount, narration: request.Description);
+        // CR Receivable (reduce what customer owes) or CR asset account (immediate cash/bank refund)
+        AddJournalLine(entry.Id, creditAccountId, credit: totalAmount, narration: request.Description);
 
         // DR Sales Returns Expense (and DR VAT) per line
         foreach (var line in request.Lines)
@@ -718,7 +755,7 @@ public class DaybookService : IDaybookService
         }
 
         await _context.SaveChangesAsync();
-        _logger.LogInformation("Sales Return daybook entry {EntryId} created for organisation {OrganisationId}", entry.Id, organisationId);
+        _logger.LogInformation("Sales Return daybook entry {EntryId} created for organisation {OrganisationId} (immediatePayment: {Immediate})", entry.Id, organisationId, request.ImmediatePayment);
         return await MapToDaybookResponse(entry);
     }
 
@@ -729,33 +766,52 @@ public class DaybookService : IDaybookService
         if (request.EntryDate.Date > DateTime.UtcNow.Date)
             throw new ValidationException("Entry date cannot be in the future.");
 
-        // Resolve the Accounts Payable account
-        Guid payableAccountId;
         Guid? supplierId = null;
+        Guid creditAccountId; // AP account (credit) or immediate payment asset account (cash/bank paid out)
 
-        if (request.SupplierId.HasValue)
+        if (request.ImmediatePayment)
         {
-            var supplier = await _context.Suppliers.FindAsync(request.SupplierId.Value);
-            if (supplier == null)
-                throw new ResourceNotFoundException("Supplier", request.SupplierId.Value.ToString());
-            supplierId = supplier.Id;
-            if (supplier.ControlAccountId.HasValue)
-                payableAccountId = supplier.ControlAccountId.Value;
-            else if (request.PayableAccountId.HasValue)
-                payableAccountId = request.PayableAccountId.Value;
-            else
-                throw new ValidationException("The specified supplier has no control account linked. Please provide a PayableAccountId.");
-        }
-        else if (request.PayableAccountId.HasValue)
-        {
-            payableAccountId = request.PayableAccountId.Value;
+            // Immediate payment: credit the chosen asset account directly — no AP involvement
+            if (!request.ImmediatePaymentAccountId.HasValue)
+                throw new ValidationException("ImmediatePaymentAccountId is required when ImmediatePayment is true.");
+            await ValidateGLAccount(request.ImmediatePaymentAccountId.Value, "Payment");
+            creditAccountId = request.ImmediatePaymentAccountId.Value;
+
+            // Supplier is optional for record-keeping only
+            if (request.SupplierId.HasValue)
+            {
+                var supplier = await _context.Suppliers.FindAsync(request.SupplierId.Value);
+                if (supplier == null)
+                    throw new ResourceNotFoundException("Supplier", request.SupplierId.Value.ToString());
+                supplierId = supplier.Id;
+            }
         }
         else
         {
-            throw new ValidationException("Either SupplierId (with a linked AP account) or PayableAccountId must be specified.");
+            // Credit purchase: resolve the Accounts Payable account
+            if (request.SupplierId.HasValue)
+            {
+                var supplier = await _context.Suppliers.FindAsync(request.SupplierId.Value);
+                if (supplier == null)
+                    throw new ResourceNotFoundException("Supplier", request.SupplierId.Value.ToString());
+                supplierId = supplier.Id;
+                if (supplier.ControlAccountId.HasValue)
+                    creditAccountId = supplier.ControlAccountId.Value;
+                else if (request.PayableAccountId.HasValue)
+                    creditAccountId = request.PayableAccountId.Value;
+                else
+                    throw new ValidationException("The specified supplier has no control account linked. Please provide a PayableAccountId.");
+            }
+            else if (request.PayableAccountId.HasValue)
+            {
+                creditAccountId = request.PayableAccountId.Value;
+            }
+            else
+            {
+                throw new ValidationException("Either SupplierId (with a linked AP account) or PayableAccountId must be specified.");
+            }
+            await ValidateGLAccount(creditAccountId, "Payable");
         }
-
-        await ValidateGLAccount(payableAccountId, "Payable");
 
         bool hasVat = request.Lines.Any(l => l.VatAmount > 0);
         if (hasVat && !request.VatAccountId.HasValue)
@@ -779,11 +835,11 @@ public class DaybookService : IDaybookService
                 AddJournalLine(entry.Id, request.VatAccountId!.Value, debit: line.VatAmount, narration: $"VAT on {line.Description}");
         }
 
-        // CR Payable for the full invoice total
-        AddJournalLine(entry.Id, payableAccountId, credit: totalAmount, narration: request.Description);
+        // CR Payable (credit) or CR asset account (immediate cash/bank payment)
+        AddJournalLine(entry.Id, creditAccountId, credit: totalAmount, narration: request.Description);
 
         await _context.SaveChangesAsync();
-        _logger.LogInformation("Purchase daybook entry {EntryId} created for organisation {OrganisationId}", entry.Id, organisationId);
+        _logger.LogInformation("Purchase daybook entry {EntryId} created for organisation {OrganisationId} (immediatePayment: {Immediate})", entry.Id, organisationId, request.ImmediatePayment);
         return await MapToDaybookResponse(entry);
     }
 
@@ -794,31 +850,49 @@ public class DaybookService : IDaybookService
         if (request.EntryDate.Date > DateTime.UtcNow.Date)
             throw new ValidationException("Entry date cannot be in the future.");
 
-        Guid payableAccountId;
         Guid? supplierId = null;
+        Guid debitAccountId; // AP account (debit) or immediate payment asset account (cash/bank received back)
 
-        if (request.SupplierId.HasValue)
+        if (request.ImmediatePayment)
         {
-            var supplier = await _context.Suppliers.FindAsync(request.SupplierId.Value);
-            if (supplier == null) throw new ResourceNotFoundException("Supplier", request.SupplierId.Value.ToString());
-            supplierId = supplier.Id;
-            if (supplier.ControlAccountId.HasValue)
-                payableAccountId = supplier.ControlAccountId.Value;
-            else if (request.PayableAccountId.HasValue)
-                payableAccountId = request.PayableAccountId.Value;
-            else
-                throw new ValidationException("The specified supplier has no control account linked. Please provide a PayableAccountId.");
-        }
-        else if (request.PayableAccountId.HasValue)
-        {
-            payableAccountId = request.PayableAccountId.Value;
+            // Immediate refund: debit the chosen asset account directly — no AP involvement
+            if (!request.ImmediatePaymentAccountId.HasValue)
+                throw new ValidationException("ImmediatePaymentAccountId is required when ImmediatePayment is true.");
+            await ValidateGLAccount(request.ImmediatePaymentAccountId.Value, "Payment");
+            debitAccountId = request.ImmediatePaymentAccountId.Value;
+
+            if (request.SupplierId.HasValue)
+            {
+                var supplier = await _context.Suppliers.FindAsync(request.SupplierId.Value);
+                if (supplier == null) throw new ResourceNotFoundException("Supplier", request.SupplierId.Value.ToString());
+                supplierId = supplier.Id;
+            }
         }
         else
         {
-            throw new ValidationException("Either SupplierId (with a linked AP account) or PayableAccountId must be specified.");
+            // Credit purchase return: resolve the Accounts Payable account
+            if (request.SupplierId.HasValue)
+            {
+                var supplier = await _context.Suppliers.FindAsync(request.SupplierId.Value);
+                if (supplier == null) throw new ResourceNotFoundException("Supplier", request.SupplierId.Value.ToString());
+                supplierId = supplier.Id;
+                if (supplier.ControlAccountId.HasValue)
+                    debitAccountId = supplier.ControlAccountId.Value;
+                else if (request.PayableAccountId.HasValue)
+                    debitAccountId = request.PayableAccountId.Value;
+                else
+                    throw new ValidationException("The specified supplier has no control account linked. Please provide a PayableAccountId.");
+            }
+            else if (request.PayableAccountId.HasValue)
+            {
+                debitAccountId = request.PayableAccountId.Value;
+            }
+            else
+            {
+                throw new ValidationException("Either SupplierId (with a linked AP account) or PayableAccountId must be specified.");
+            }
+            await ValidateGLAccount(debitAccountId, "Payable");
         }
-
-        await ValidateGLAccount(payableAccountId, "Payable");
 
         bool hasVat = request.Lines.Any(l => l.VatAmount > 0);
         if (hasVat && !request.VatAccountId.HasValue)
@@ -834,8 +908,8 @@ public class DaybookService : IDaybookService
         var entry = BuildDaybookEntry(organisationId, "PurchaseReturn", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
         _context.DaybookEntries.Add(entry);
 
-        // DR Payable (reduce what we owe supplier)
-        AddJournalLine(entry.Id, payableAccountId, debit: totalAmount, narration: request.Description);
+        // DR Payable (reduce what we owe supplier) or DR asset account (immediate cash/bank refund received)
+        AddJournalLine(entry.Id, debitAccountId, debit: totalAmount, narration: request.Description);
 
         // CR Expense (and VAT) per line — reversed
         foreach (var line in request.Lines)
@@ -846,7 +920,7 @@ public class DaybookService : IDaybookService
         }
 
         await _context.SaveChangesAsync();
-        _logger.LogInformation("Purchase Return daybook entry {EntryId} created for organisation {OrganisationId}", entry.Id, organisationId);
+        _logger.LogInformation("Purchase Return daybook entry {EntryId} created for organisation {OrganisationId} (immediatePayment: {Immediate})", entry.Id, organisationId, request.ImmediatePayment);
         return await MapToDaybookResponse(entry);
     }
 
@@ -945,14 +1019,28 @@ public class DaybookService : IDaybookService
             throw new ValidationException("Entry date cannot be in the future.");
 
         var (org, arAccountId, vatAccountId) = await ResolveOrgDefaults(organisationId, "1100");
-        var (customerId, resolvedArId) = await ResolveCustomer(request.CustomerId, arAccountId);
-        arAccountId = resolvedArId;
         var lines = await ResolveSimpleLines(organisationId, request.Lines, org, "4000");
         decimal total = lines.Sum(l => l.netAmount + l.vatAmount);
 
+        Guid debitAccountId;
+        Guid? customerId;
+
+        if (request.ImmediatePayment)
+        {
+            if (!request.ImmediatePaymentAccountId.HasValue)
+                throw new ValidationException("ImmediatePaymentAccountId is required when ImmediatePayment is true.");
+            await ValidateGLAccount(request.ImmediatePaymentAccountId.Value, "Payment");
+            debitAccountId = request.ImmediatePaymentAccountId.Value;
+            (customerId, _) = await ResolveCustomer(request.CustomerId, arAccountId);
+        }
+        else
+        {
+            (customerId, debitAccountId) = await ResolveCustomer(request.CustomerId, arAccountId);
+        }
+
         var entry = BuildDaybookEntry(organisationId, "Sales", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
         _context.DaybookEntries.Add(entry);
-        AddJournalLine(entry.Id, arAccountId, debit: total, narration: request.Description);
+        AddJournalLine(entry.Id, debitAccountId, debit: total, narration: request.Description);
         foreach (var (accountId, desc, netAmount, vatAmount) in lines)
         {
             AddJournalLine(entry.Id, accountId, credit: netAmount, narration: desc);
@@ -969,14 +1057,28 @@ public class DaybookService : IDaybookService
             throw new ValidationException("Entry date cannot be in the future.");
 
         var (org, arAccountId, vatAccountId) = await ResolveOrgDefaults(organisationId, "1100");
-        var (customerId, resolvedArId) = await ResolveCustomer(request.CustomerId, arAccountId);
-        arAccountId = resolvedArId;
         var lines = await ResolveSimpleLines(organisationId, request.Lines, org, "4100");
         decimal total = lines.Sum(l => l.netAmount + l.vatAmount);
 
+        Guid creditAccountId;
+        Guid? customerId;
+
+        if (request.ImmediatePayment)
+        {
+            if (!request.ImmediatePaymentAccountId.HasValue)
+                throw new ValidationException("ImmediatePaymentAccountId is required when ImmediatePayment is true.");
+            await ValidateGLAccount(request.ImmediatePaymentAccountId.Value, "Payment");
+            creditAccountId = request.ImmediatePaymentAccountId.Value;
+            (customerId, _) = await ResolveCustomer(request.CustomerId, arAccountId);
+        }
+        else
+        {
+            (customerId, creditAccountId) = await ResolveCustomer(request.CustomerId, arAccountId);
+        }
+
         var entry = BuildDaybookEntry(organisationId, "SalesReturn", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
         _context.DaybookEntries.Add(entry);
-        AddJournalLine(entry.Id, arAccountId, credit: total, narration: request.Description);
+        AddJournalLine(entry.Id, creditAccountId, credit: total, narration: request.Description);
         foreach (var (accountId, desc, netAmount, vatAmount) in lines)
         {
             AddJournalLine(entry.Id, accountId, debit: netAmount, narration: desc);
@@ -993,10 +1095,24 @@ public class DaybookService : IDaybookService
             throw new ValidationException("Entry date cannot be in the future.");
 
         var (org, apAccountId, vatAccountId) = await ResolveOrgDefaults(organisationId, "2000");
-        var (supplierId, resolvedApId) = await ResolveSupplier(request.SupplierId, apAccountId);
-        apAccountId = resolvedApId;
         var lines = await ResolveSimpleLines(organisationId, request.Lines, org, "5000");
         decimal total = lines.Sum(l => l.netAmount + l.vatAmount);
+
+        Guid creditAccountId;
+        Guid? supplierId;
+
+        if (request.ImmediatePayment)
+        {
+            if (!request.ImmediatePaymentAccountId.HasValue)
+                throw new ValidationException("ImmediatePaymentAccountId is required when ImmediatePayment is true.");
+            await ValidateGLAccount(request.ImmediatePaymentAccountId.Value, "Payment");
+            creditAccountId = request.ImmediatePaymentAccountId.Value;
+            (supplierId, _) = await ResolveSupplier(request.SupplierId, apAccountId);
+        }
+        else
+        {
+            (supplierId, creditAccountId) = await ResolveSupplier(request.SupplierId, apAccountId);
+        }
 
         var entry = BuildDaybookEntry(organisationId, "Purchase", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
         _context.DaybookEntries.Add(entry);
@@ -1006,7 +1122,7 @@ public class DaybookService : IDaybookService
             if (vatAmount > 0 && vatAccountId.HasValue)
                 AddJournalLine(entry.Id, vatAccountId.Value, debit: vatAmount, narration: $"VAT on {desc}");
         }
-        AddJournalLine(entry.Id, apAccountId, credit: total, narration: request.Description);
+        AddJournalLine(entry.Id, creditAccountId, credit: total, narration: request.Description);
         await _context.SaveChangesAsync();
         return await MapToDaybookResponse(entry);
     }
@@ -1017,14 +1133,28 @@ public class DaybookService : IDaybookService
             throw new ValidationException("Entry date cannot be in the future.");
 
         var (org, apAccountId, vatAccountId) = await ResolveOrgDefaults(organisationId, "2000");
-        var (supplierId, resolvedApId) = await ResolveSupplier(request.SupplierId, apAccountId);
-        apAccountId = resolvedApId;
         var lines = await ResolveSimpleLines(organisationId, request.Lines, org, "5100");
         decimal total = lines.Sum(l => l.netAmount + l.vatAmount);
 
+        Guid debitAccountId;
+        Guid? supplierId;
+
+        if (request.ImmediatePayment)
+        {
+            if (!request.ImmediatePaymentAccountId.HasValue)
+                throw new ValidationException("ImmediatePaymentAccountId is required when ImmediatePayment is true.");
+            await ValidateGLAccount(request.ImmediatePaymentAccountId.Value, "Payment");
+            debitAccountId = request.ImmediatePaymentAccountId.Value;
+            (supplierId, _) = await ResolveSupplier(request.SupplierId, apAccountId);
+        }
+        else
+        {
+            (supplierId, debitAccountId) = await ResolveSupplier(request.SupplierId, apAccountId);
+        }
+
         var entry = BuildDaybookEntry(organisationId, "PurchaseReturn", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
         _context.DaybookEntries.Add(entry);
-        AddJournalLine(entry.Id, apAccountId, debit: total, narration: request.Description);
+        AddJournalLine(entry.Id, debitAccountId, debit: total, narration: request.Description);
         foreach (var (accountId, desc, netAmount, vatAmount) in lines)
         {
             AddJournalLine(entry.Id, accountId, credit: netAmount, narration: desc);

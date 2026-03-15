@@ -146,9 +146,12 @@ public class CreateSalesDaybookRequest
     [Required]
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
-    // Either CustomerId (with a ControlAccountId) or ReceivableAccountId must be provided
+    // Credit payment: either CustomerId (with a ControlAccountId) or ReceivableAccountId must be provided
     public Guid? CustomerId { get; set; }
     public Guid? ReceivableAccountId { get; set; }
+    // Immediate payment: bypasses AR — the chosen asset account is debited directly
+    public bool ImmediatePayment { get; set; } = false;
+    public Guid? ImmediatePaymentAccountId { get; set; }
     // Required when any line has VatAmount > 0
     public Guid? VatAccountId { get; set; }
     [Required]
@@ -175,9 +178,12 @@ public class CreateSalesReturnDaybookRequest
     [Required]
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
-    // Either CustomerId (with a ControlAccountId) or ReceivableAccountId must be provided
+    // Credit payment: either CustomerId (with a ControlAccountId) or ReceivableAccountId must be provided
     public Guid? CustomerId { get; set; }
     public Guid? ReceivableAccountId { get; set; }
+    // Immediate payment: bypasses AR — the chosen asset account is credited directly (cash/bank refunded)
+    public bool ImmediatePayment { get; set; } = false;
+    public Guid? ImmediatePaymentAccountId { get; set; }
     // Required when any line has VatAmount > 0
     public Guid? VatAccountId { get; set; }
     [Required]
@@ -205,9 +211,12 @@ public class CreatePurchaseDaybookRequest
     [Required]
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
-    // Either SupplierId (with a ControlAccountId) or PayableAccountId must be provided
+    // Credit payment: either SupplierId (with a ControlAccountId) or PayableAccountId must be provided
     public Guid? SupplierId { get; set; }
     public Guid? PayableAccountId { get; set; }
+    // Immediate payment: bypasses AP — the chosen asset account is credited directly (cash/bank paid out)
+    public bool ImmediatePayment { get; set; } = false;
+    public Guid? ImmediatePaymentAccountId { get; set; }
     // Required when any line has VatAmount > 0
     public Guid? VatAccountId { get; set; }
     [Required]
@@ -660,6 +669,9 @@ public class SimpleInvoiceRequest
     public string? Description { get; set; }
     public Guid? CustomerId { get; set; }
     public Guid? SupplierId { get; set; }
+    // Immediate payment: bypasses AR/AP — the chosen asset account is used directly
+    public bool ImmediatePayment { get; set; } = false;
+    public Guid? ImmediatePaymentAccountId { get; set; }
     [Required]
     [MinLength(1, ErrorMessage = "At least 1 line is required")]
     public List<SimpleInvoiceLine> Lines { get; set; } = new();
