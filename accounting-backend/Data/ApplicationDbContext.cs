@@ -20,6 +20,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Supplier> Suppliers { get; set; }
     public DbSet<AccountBalance> AccountBalances { get; set; }
     public DbSet<ProductService> Products { get; set; }
+    public DbSet<DaybookSequence> DaybookSequences { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -156,5 +157,9 @@ public class ApplicationDbContext : DbContext
             .WithMany(o => o.Products)
             .HasForeignKey(p => p.OrganisationId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // DaybookSequence configuration — composite PK (OrganisationId + EntryType)
+        modelBuilder.Entity<DaybookSequence>()
+            .HasKey(s => new { s.OrganisationId, s.EntryType });
     }
 }

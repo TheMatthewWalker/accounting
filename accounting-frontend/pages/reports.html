@@ -55,6 +55,37 @@
                 <button id="glBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">General Ledger</button>
             </div>
 
+            <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+                <h3 style="margin: 0; font-size: 1em; color: var(--secondary-color); text-transform: uppercase; letter-spacing: 0.05em;">Pro Reports</h3>
+                <span id="proTierBadge" style="font-size: 0.75em; padding: 2px 8px; border-radius: 12px; background: #dbeafe; color: #1d4ed8; font-weight: 600;"></span>
+            </div>
+            <div class="dashboard-grid" style="margin-bottom: 30px;" id="proReportsGrid">
+                <button id="agedDebtorsBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">Aged Debtors</button>
+                <button id="agedCreditorsBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">Aged Creditors</button>
+                <button id="vatReturnBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">VAT Return</button>
+                <button id="incomeByCustomerBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">Income by Customer</button>
+                <button id="spendBySupplierBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">Spend by Supplier</button>
+            </div>
+
+            <div style="margin-bottom: 8px; display: flex; align-items: center; gap: 10px;">
+                <h3 style="margin: 0; font-size: 1em; color: var(--secondary-color); text-transform: uppercase; letter-spacing: 0.05em;">Enterprise Reports</h3>
+                <span id="enterpriseTierBadge" style="font-size: 0.75em; padding: 2px 8px; border-radius: 12px; background: #ede9fe; color: #6d28d9; font-weight: 600;"></span>
+            </div>
+            <div style="margin-bottom: 8px;">
+                <label style="font-size: 0.85em; color: var(--secondary-color);">Compare Period From</label>
+                <input type="date" id="compareFromDate" style="margin-left: 8px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                <label style="font-size: 0.85em; color: var(--secondary-color); margin-left: 16px;">To</label>
+                <input type="date" id="compareToDate" style="margin-left: 8px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color);">
+                <span style="font-size: 0.8em; color: var(--secondary-color); margin-left: 8px;">(used by Comparative P&amp;L as period 2)</span>
+            </div>
+            <div class="dashboard-grid" style="margin-bottom: 30px;" id="enterpriseReportsGrid">
+                <button id="comparativePlBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">Comparative P&amp;L</button>
+                <button id="cashFlowBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">Cash Flow Statement</button>
+                <button id="accountActivityBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">Account Activity</button>
+                <button id="revenueBreakdownBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">Revenue Breakdown</button>
+                <button id="daybookAuditBtn" class="btn btn-secondary" style="width: 100%; padding: 15px;">Daybook Audit</button>
+            </div>
+
             <div id="reportContainer" class="table-container">
                 <p style="text-align: center; color: var(--secondary-color);">Select a report to view</p>
             </div>
@@ -75,8 +106,12 @@
         // Set default dates: from = first day of current year, to = today
         const today = new Date();
         const firstOfYear = new Date(today.getFullYear(), 0, 1);
+        const firstOfPriorYear = new Date(today.getFullYear() - 1, 0, 1);
+        const endOfPriorYear = new Date(today.getFullYear() - 1, 11, 31);
         document.getElementById('reportDate').valueAsDate = today;
         document.getElementById('fromDate').valueAsDate = firstOfYear;
+        document.getElementById('compareFromDate').valueAsDate = firstOfPriorYear;
+        document.getElementById('compareToDate').valueAsDate = endOfPriorYear;
 
         const reportContainer = document.getElementById('reportContainer');
         const reportDate = document.getElementById('reportDate');
@@ -416,13 +451,619 @@
             );
         });
 
-        // ── Organisation selector ─────────────────────────────────────────────────
+        // ── Tier helpers ──────────────────────────────────────────────────────────
 
-        document.getElementById('organisationSelect').addEventListener('change', (e) => {
-            if (e.target.value) ApiService.setSelectedOrg(e.target.value);
+        let currentTier = 'Free';
+
+        function updateTierBadges(tier) {
+            currentTier = tier;
+            const proBadge = document.getElementById('proTierBadge');
+            const entBadge = document.getElementById('enterpriseTierBadge');
+            const locked = { background: '#fee2e2', color: '#b91c1c' };
+            const unlocked = { background: '#dcfce7', color: '#15803d' };
+
+            const proUnlocked = (tier === 'Pro' || tier === 'Enterprise');
+            const entUnlocked = (tier === 'Enterprise');
+
+            proBadge.textContent = proUnlocked ? 'Included' : 'Pro required';
+            Object.assign(proBadge.style, proUnlocked ? unlocked : locked);
+
+            entBadge.textContent = entUnlocked ? 'Included' : 'Enterprise required';
+            Object.assign(entBadge.style, entUnlocked ? unlocked : locked);
+        }
+
+        function requireTier(requiredTier) {
+            const tiers = ['Free', 'Pro', 'Enterprise'];
+            if (tiers.indexOf(currentTier) < tiers.indexOf(requiredTier)) {
+                UIUtils.showAlert(`This report requires a ${requiredTier} subscription. Your current plan is ${currentTier}.`, 'error');
+                return false;
+            }
+            return true;
+        }
+
+        // ── Aged Debtors ──────────────────────────────────────────────────────────
+
+        document.getElementById('agedDebtorsBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+            if (!requireTier('Pro')) return;
+
+            UIUtils.showLoading();
+            const response = await ApiService.getAgedDebtors(orgId, reportDate.value);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error'); return; }
+
+            const r = response.data;
+            const cols = ['Customer', '0–30 Days', '31–60 Days', '61–90 Days', '91+ Days', 'Total'];
+            let html = `<h3>Aged Debtors as of ${fmtD(r.asOfDate)}</h3>`;
+            html += `<table style="width: 100%;">
+                <thead><tr>
+                    <th>Customer</th>
+                    <th style="text-align: right;">0–30 Days</th>
+                    <th style="text-align: right;">31–60 Days</th>
+                    <th style="text-align: right;">61–90 Days</th>
+                    <th style="text-align: right;">91+ Days</th>
+                    <th style="text-align: right;">Total</th>
+                </tr></thead><tbody>`;
+            r.customers.forEach(c => {
+                html += `<tr>
+                    <td>${c.customerName}</td>
+                    <td style="text-align: right;">${fmt(c.current)}</td>
+                    <td style="text-align: right; color: ${c.days30 > 0 ? '#b45309' : 'inherit'};">${fmt(c.days30)}</td>
+                    <td style="text-align: right; color: ${c.days60 > 0 ? '#b45309' : 'inherit'};">${fmt(c.days60)}</td>
+                    <td style="text-align: right; color: ${c.over90 > 0 ? '#b91c1c' : 'inherit'};">${fmt(c.over90)}</td>
+                    <td style="text-align: right; font-weight: 600;">${fmt(c.total)}</td>
+                </tr>`;
+            });
+            html += `<tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                <td>Total</td>
+                <td style="text-align: right;">${fmt(r.totalCurrent)}</td>
+                <td style="text-align: right;">${fmt(r.total30Days)}</td>
+                <td style="text-align: right;">${fmt(r.total60Days)}</td>
+                <td style="text-align: right;">${fmt(r.totalOver90Days)}</td>
+                <td style="text-align: right;">${fmt(r.grandTotal)}</td>
+            </tr></tbody></table>`;
+            reportContainer.innerHTML = html;
+
+            const exportRows = r.customers.map(c => [c.customerName, fmt(c.current), fmt(c.days30), fmt(c.days60), fmt(c.over90), fmt(c.total)]);
+            const footerRows = [['Total', fmt(r.totalCurrent), fmt(r.total30Days), fmt(r.total60Days), fmt(r.totalOver90Days), fmt(r.grandTotal)]];
+            ExportUtils.addButtons('reportContainer',
+                () => ExportUtils.toPDF('Aged Debtors', `As of ${fmtD(r.asOfDate)}`, cols, exportRows, `AgedDebtors_${reportDate.value}`, footerRows),
+                () => ExportUtils.toExcel('Aged Debtors', cols, exportRows, `AgedDebtors_${reportDate.value}`, footerRows)
+            );
         });
 
-        await ApiService.populateOrganisationSelector();
+        // ── Aged Creditors ────────────────────────────────────────────────────────
+
+        document.getElementById('agedCreditorsBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+            if (!requireTier('Pro')) return;
+
+            UIUtils.showLoading();
+            const response = await ApiService.getAgedCreditors(orgId, reportDate.value);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error'); return; }
+
+            const r = response.data;
+            const cols = ['Supplier', '0–30 Days', '31–60 Days', '61–90 Days', '91+ Days', 'Total'];
+            let html = `<h3>Aged Creditors as of ${fmtD(r.asOfDate)}</h3>`;
+            html += `<table style="width: 100%;">
+                <thead><tr>
+                    <th>Supplier</th>
+                    <th style="text-align: right;">0–30 Days</th>
+                    <th style="text-align: right;">31–60 Days</th>
+                    <th style="text-align: right;">61–90 Days</th>
+                    <th style="text-align: right;">91+ Days</th>
+                    <th style="text-align: right;">Total</th>
+                </tr></thead><tbody>`;
+            r.suppliers.forEach(s => {
+                html += `<tr>
+                    <td>${s.supplierName}</td>
+                    <td style="text-align: right;">${fmt(s.current)}</td>
+                    <td style="text-align: right; color: ${s.days30 > 0 ? '#b45309' : 'inherit'};">${fmt(s.days30)}</td>
+                    <td style="text-align: right; color: ${s.days60 > 0 ? '#b45309' : 'inherit'};">${fmt(s.days60)}</td>
+                    <td style="text-align: right; color: ${s.over90 > 0 ? '#b91c1c' : 'inherit'};">${fmt(s.over90)}</td>
+                    <td style="text-align: right; font-weight: 600;">${fmt(s.total)}</td>
+                </tr>`;
+            });
+            html += `<tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                <td>Total</td>
+                <td style="text-align: right;">${fmt(r.totalCurrent)}</td>
+                <td style="text-align: right;">${fmt(r.total30Days)}</td>
+                <td style="text-align: right;">${fmt(r.total60Days)}</td>
+                <td style="text-align: right;">${fmt(r.totalOver90Days)}</td>
+                <td style="text-align: right;">${fmt(r.grandTotal)}</td>
+            </tr></tbody></table>`;
+            reportContainer.innerHTML = html;
+
+            const exportRows = r.suppliers.map(s => [s.supplierName, fmt(s.current), fmt(s.days30), fmt(s.days60), fmt(s.over90), fmt(s.total)]);
+            const footerRows = [['Total', fmt(r.totalCurrent), fmt(r.total30Days), fmt(r.total60Days), fmt(r.totalOver90Days), fmt(r.grandTotal)]];
+            ExportUtils.addButtons('reportContainer',
+                () => ExportUtils.toPDF('Aged Creditors', `As of ${fmtD(r.asOfDate)}`, cols, exportRows, `AgedCreditors_${reportDate.value}`, footerRows),
+                () => ExportUtils.toExcel('Aged Creditors', cols, exportRows, `AgedCreditors_${reportDate.value}`, footerRows)
+            );
+        });
+
+        // ── VAT Return ────────────────────────────────────────────────────────────
+
+        document.getElementById('vatReturnBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+            if (!requireTier('Pro')) return;
+
+            UIUtils.showLoading();
+            const response = await ApiService.getVatReturn(orgId, fromDate.value, reportDate.value);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error'); return; }
+
+            const r = response.data;
+            const subtitle = `Period: ${fmtD(r.fromDate)} – ${fmtD(r.toDate)}`;
+            let html = `<h3>VAT Return</h3><p style="color: var(--secondary-color);">${subtitle}</p>`;
+            html += `<table style="width: 100%; margin-bottom: 20px;">
+                <thead><tr>
+                    <th>Account Code</th><th>Account Name</th>
+                    <th style="text-align: right;">Output VAT (Sales)</th>
+                    <th style="text-align: right;">Input VAT (Purchases)</th>
+                </tr></thead><tbody>`;
+            r.lines.forEach(l => {
+                html += `<tr>
+                    <td>${l.accountCode}</td><td>${l.accountName}</td>
+                    <td style="text-align: right;">${fmt(l.outputVat)}</td>
+                    <td style="text-align: right;">${fmt(l.inputVat)}</td>
+                </tr>`;
+            });
+            html += `<tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                <td colspan="2">Totals</td>
+                <td style="text-align: right;">${fmt(r.outputVat)}</td>
+                <td style="text-align: right;">${fmt(r.inputVat)}</td>
+            </tr></tbody></table>`;
+            html += `<div style="background: var(--light-bg); padding: 16px; border-radius: 8px; display: inline-block; min-width: 300px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span>Output VAT (collected):</span><strong>${fmt(r.outputVat)}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span>Input VAT (reclaimable):</span><strong>(${fmt(r.inputVat)})</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-top: 2px solid var(--border-color); padding-top: 8px;">
+                    <span style="font-weight: 700;">Net VAT ${r.netVatPayable >= 0 ? 'Payable' : 'Reclaimable'}:</span>
+                    <strong style="color: ${r.netVatPayable >= 0 ? '#b91c1c' : '#15803d'};">${fmt(Math.abs(r.netVatPayable))}</strong>
+                </div>
+            </div>`;
+            reportContainer.innerHTML = html;
+
+            const cols = ['Account Code', 'Account Name', 'Output VAT', 'Input VAT'];
+            const exportRows = r.lines.map(l => [l.accountCode, l.accountName, fmt(l.outputVat), fmt(l.inputVat)]);
+            const footerRows = [
+                ['', 'Total', fmt(r.outputVat), fmt(r.inputVat)],
+                ['', `Net VAT ${r.netVatPayable >= 0 ? 'Payable' : 'Reclaimable'}`, '', fmt(Math.abs(r.netVatPayable))]
+            ];
+            ExportUtils.addButtons('reportContainer',
+                () => ExportUtils.toPDF('VAT Return', subtitle, cols, exportRows, `VATReturn_${fromDate.value}_${reportDate.value}`, footerRows),
+                () => ExportUtils.toExcel('VAT Return', cols, exportRows, `VATReturn_${fromDate.value}_${reportDate.value}`, footerRows)
+            );
+        });
+
+        // ── Income by Customer ────────────────────────────────────────────────────
+
+        document.getElementById('incomeByCustomerBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+            if (!requireTier('Pro')) return;
+
+            UIUtils.showLoading();
+            const response = await ApiService.getIncomeByCustomer(orgId, fromDate.value, reportDate.value);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error'); return; }
+
+            const r = response.data;
+            const subtitle = `Period: ${fmtD(r.fromDate)} – ${fmtD(r.toDate)}`;
+            let html = `<h3>Income by Customer</h3><p style="color: var(--secondary-color);">${subtitle}</p>`;
+            html += `<table style="width: 100%;">
+                <thead><tr>
+                    <th>Customer</th>
+                    <th style="text-align: right;">Invoices</th>
+                    <th style="text-align: right;">Total Invoiced</th>
+                    <th style="text-align: right;">Total Received</th>
+                    <th style="text-align: right;">Outstanding</th>
+                </tr></thead><tbody>`;
+            r.lines.forEach(l => {
+                html += `<tr>
+                    <td>${l.customerName}</td>
+                    <td style="text-align: right;">${l.invoiceCount}</td>
+                    <td style="text-align: right;">${fmt(l.totalInvoiced)}</td>
+                    <td style="text-align: right;">${fmt(l.totalReceived)}</td>
+                    <td style="text-align: right; color: ${l.outstanding > 0 ? '#b91c1c' : 'inherit'};">${fmt(l.outstanding)}</td>
+                </tr>`;
+            });
+            html += `<tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                <td>Total</td>
+                <td style="text-align: right;">${r.lines.reduce((s, l) => s + l.invoiceCount, 0)}</td>
+                <td style="text-align: right;">${fmt(r.total)}</td>
+                <td style="text-align: right;">${fmt(r.lines.reduce((s, l) => s + l.totalReceived, 0))}</td>
+                <td style="text-align: right;">${fmt(r.lines.reduce((s, l) => s + l.outstanding, 0))}</td>
+            </tr></tbody></table>`;
+            reportContainer.innerHTML = html;
+
+            const cols = ['Customer', 'Invoices', 'Total Invoiced', 'Total Received', 'Outstanding'];
+            const exportRows = r.lines.map(l => [l.customerName, l.invoiceCount, fmt(l.totalInvoiced), fmt(l.totalReceived), fmt(l.outstanding)]);
+            ExportUtils.addButtons('reportContainer',
+                () => ExportUtils.toPDF('Income by Customer', subtitle, cols, exportRows, `IncomeByCustomer_${fromDate.value}_${reportDate.value}`),
+                () => ExportUtils.toExcel('Income by Customer', cols, exportRows, `IncomeByCustomer_${fromDate.value}_${reportDate.value}`)
+            );
+        });
+
+        // ── Spend by Supplier ─────────────────────────────────────────────────────
+
+        document.getElementById('spendBySupplierBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+            if (!requireTier('Pro')) return;
+
+            UIUtils.showLoading();
+            const response = await ApiService.getSpendBySupplier(orgId, fromDate.value, reportDate.value);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error'); return; }
+
+            const r = response.data;
+            const subtitle = `Period: ${fmtD(r.fromDate)} – ${fmtD(r.toDate)}`;
+            let html = `<h3>Spend by Supplier</h3><p style="color: var(--secondary-color);">${subtitle}</p>`;
+            html += `<table style="width: 100%;">
+                <thead><tr>
+                    <th>Supplier</th>
+                    <th style="text-align: right;">Bills</th>
+                    <th style="text-align: right;">Total Invoiced</th>
+                    <th style="text-align: right;">Total Paid</th>
+                    <th style="text-align: right;">Outstanding</th>
+                </tr></thead><tbody>`;
+            r.lines.forEach(l => {
+                html += `<tr>
+                    <td>${l.supplierName}</td>
+                    <td style="text-align: right;">${l.invoiceCount}</td>
+                    <td style="text-align: right;">${fmt(l.totalInvoiced)}</td>
+                    <td style="text-align: right;">${fmt(l.totalPaid)}</td>
+                    <td style="text-align: right; color: ${l.outstanding > 0 ? '#b91c1c' : 'inherit'};">${fmt(l.outstanding)}</td>
+                </tr>`;
+            });
+            html += `<tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                <td>Total</td>
+                <td style="text-align: right;">${r.lines.reduce((s, l) => s + l.invoiceCount, 0)}</td>
+                <td style="text-align: right;">${fmt(r.total)}</td>
+                <td style="text-align: right;">${fmt(r.lines.reduce((s, l) => s + l.totalPaid, 0))}</td>
+                <td style="text-align: right;">${fmt(r.lines.reduce((s, l) => s + l.outstanding, 0))}</td>
+            </tr></tbody></table>`;
+            reportContainer.innerHTML = html;
+
+            const cols = ['Supplier', 'Bills', 'Total Invoiced', 'Total Paid', 'Outstanding'];
+            const exportRows = r.lines.map(l => [l.supplierName, l.invoiceCount, fmt(l.totalInvoiced), fmt(l.totalPaid), fmt(l.outstanding)]);
+            ExportUtils.addButtons('reportContainer',
+                () => ExportUtils.toPDF('Spend by Supplier', subtitle, cols, exportRows, `SpendBySupplier_${fromDate.value}_${reportDate.value}`),
+                () => ExportUtils.toExcel('Spend by Supplier', cols, exportRows, `SpendBySupplier_${fromDate.value}_${reportDate.value}`)
+            );
+        });
+
+        // ── Comparative P&L ───────────────────────────────────────────────────────
+
+        document.getElementById('comparativePlBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+            if (!requireTier('Enterprise')) return;
+
+            const p2From = document.getElementById('compareFromDate').value;
+            const p2To = document.getElementById('compareToDate').value;
+            if (!p2From || !p2To) { UIUtils.showAlert('Please set the compare period dates', 'error'); return; }
+
+            UIUtils.showLoading();
+            const response = await ApiService.getComparativeProfitAndLoss(orgId, fromDate.value, reportDate.value, p2From, p2To);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error'); return; }
+
+            const r = response.data;
+            const p1Label = `${fmtD(r.period1From)} – ${fmtD(r.period1To)}`;
+            const p2Label = `${fmtD(r.period2From)} – ${fmtD(r.period2To)}`;
+
+            function compRow(line) {
+                const varStyle = line.variance >= 0 ? 'color: #15803d;' : 'color: #b91c1c;';
+                return `<tr>
+                    <td style="padding-left: 24px;">${line.code}</td>
+                    <td style="padding-left: 24px;">${line.name}</td>
+                    <td style="text-align: right;">${fmt(line.period1)}</td>
+                    <td style="text-align: right;">${fmt(line.period2)}</td>
+                    <td style="text-align: right; ${varStyle}">${line.variance >= 0 ? '+' : ''}${fmt(line.variance)}</td>
+                </tr>`;
+            }
+
+            let html = `<h3>Comparative Profit &amp; Loss</h3>`;
+            html += `<table style="width: 100%;">
+                <thead><tr>
+                    <th>Code</th><th>Account</th>
+                    <th style="text-align: right;">Period 1<br><small>${p1Label}</small></th>
+                    <th style="text-align: right;">Period 2<br><small>${p2Label}</small></th>
+                    <th style="text-align: right;">Variance</th>
+                </tr></thead><tbody>`;
+
+            if (r.revenue.length > 0) {
+                html += `<tr style="background: var(--light-bg);"><td colspan="5" style="font-weight: 700; padding: 8px; text-transform: uppercase; font-size: 0.85em;">Revenue</td></tr>`;
+                r.revenue.forEach(l => { html += compRow(l); });
+            }
+            html += `<tr style="border-top: 1px solid var(--border-color); font-weight: 600;">
+                <td colspan="2" style="padding-left: 8px;">Gross Profit</td>
+                <td style="text-align: right;">${fmt(r.grossProfit1)}</td>
+                <td style="text-align: right;">${fmt(r.grossProfit2)}</td>
+                <td style="text-align: right;">${fmt(r.grossProfit1 - r.grossProfit2)}</td>
+            </tr>`;
+            if (r.operatingExpenses.length > 0) {
+                html += `<tr style="background: var(--light-bg);"><td colspan="5" style="font-weight: 700; padding: 8px; text-transform: uppercase; font-size: 0.85em;">Operating Expenses</td></tr>`;
+                r.operatingExpenses.forEach(l => { html += compRow(l); });
+            }
+            if (r.financeCosts.length > 0) {
+                html += `<tr style="background: var(--light-bg);"><td colspan="5" style="font-weight: 700; padding: 8px; text-transform: uppercase; font-size: 0.85em;">Finance Costs</td></tr>`;
+                r.financeCosts.forEach(l => { html += compRow(l); });
+            }
+            const netVar = r.netProfit1 - r.netProfit2;
+            html += `<tr style="border-top: 2px solid var(--border-color); border-bottom: 3px double var(--border-color); font-weight: 700;">
+                <td colspan="2" style="padding-left: 8px;">Net ${r.netProfit1 >= 0 ? 'Profit' : 'Loss'}</td>
+                <td style="text-align: right;">${fmt(r.netProfit1)}</td>
+                <td style="text-align: right;">${fmt(r.netProfit2)}</td>
+                <td style="text-align: right; color: ${netVar >= 0 ? '#15803d' : '#b91c1c'};">${netVar >= 0 ? '+' : ''}${fmt(netVar)}</td>
+            </tr></tbody></table>`;
+            reportContainer.innerHTML = html;
+
+            const cols = ['Code', 'Account', `Period 1 (${p1Label})`, `Period 2 (${p2Label})`, 'Variance'];
+            const exportRows = [];
+            r.revenue.forEach(l => exportRows.push([l.code, l.name, fmt(l.period1), fmt(l.period2), fmt(l.variance)]));
+            exportRows.push(['', 'Gross Profit', fmt(r.grossProfit1), fmt(r.grossProfit2), fmt(r.grossProfit1 - r.grossProfit2)]);
+            r.operatingExpenses.forEach(l => exportRows.push([l.code, l.name, fmt(l.period1), fmt(l.period2), fmt(l.variance)]));
+            r.financeCosts.forEach(l => exportRows.push([l.code, l.name, fmt(l.period1), fmt(l.period2), fmt(l.variance)]));
+            const footerRows = [['', 'Net Profit/Loss', fmt(r.netProfit1), fmt(r.netProfit2), fmt(netVar)]];
+            ExportUtils.addButtons('reportContainer',
+                () => ExportUtils.toPDF('Comparative P&L', `${p1Label} vs ${p2Label}`, cols, exportRows, `ComparativePL`, footerRows),
+                () => ExportUtils.toExcel('Comparative PL', cols, exportRows, `ComparativePL`, footerRows)
+            );
+        });
+
+        // ── Cash Flow Statement ───────────────────────────────────────────────────
+
+        document.getElementById('cashFlowBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+            if (!requireTier('Enterprise')) return;
+
+            UIUtils.showLoading();
+            const response = await ApiService.getCashFlowStatement(orgId, fromDate.value, reportDate.value);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error'); return; }
+
+            const r = response.data;
+            const subtitle = `Period: ${fmtD(r.fromDate)} – ${fmtD(r.toDate)}`;
+
+            function cfRows(lines) {
+                return lines.map(l => `<tr>
+                    <td style="padding-left: 24px;">${l.description}</td>
+                    <td style="text-align: right;">${fmt(l.amount)}</td>
+                </tr>`).join('');
+            }
+
+            let rows = sectionHeader('Operating Activities');
+            rows += cfRows(r.operatingActivities);
+            rows += subtotalRow('Net Cash from Operating Activities', r.netOperatingCashFlow, true);
+            rows += sectionHeader('Investing Activities');
+            rows += cfRows(r.investingActivities.length ? r.investingActivities : [{ description: 'No investing activities', amount: 0 }]);
+            rows += subtotalRow('Net Cash from Investing Activities', r.netInvestingCashFlow, true);
+            rows += sectionHeader('Financing Activities');
+            rows += cfRows(r.financingActivities.length ? r.financingActivities : [{ description: 'No financing activities', amount: 0 }]);
+            rows += subtotalRow('Net Cash from Financing Activities', r.netFinancingCashFlow, true);
+            rows += `<tr><td colspan="2" style="padding: 8px 0;"></td></tr>`;
+            rows += subtotalRow('Opening Cash Balance', r.openingCash);
+            rows += subtotalRow('Net Change in Cash', r.netCashFlow, true);
+            rows += totalRow('Closing Cash Balance', r.closingCash);
+
+            reportContainer.innerHTML = `<h3>Cash Flow Statement</h3>${reportTable(rows)}`;
+
+            const cols = ['Description', 'Amount'];
+            const exportRows = [
+                ['OPERATING ACTIVITIES', ''],
+                ...r.operatingActivities.map(l => [l.description, fmt(l.amount)]),
+                ['Net Cash from Operating Activities', fmt(r.netOperatingCashFlow)],
+                ['INVESTING ACTIVITIES', ''],
+                ...r.investingActivities.map(l => [l.description, fmt(l.amount)]),
+                ['Net Cash from Investing Activities', fmt(r.netInvestingCashFlow)],
+                ['FINANCING ACTIVITIES', ''],
+                ...r.financingActivities.map(l => [l.description, fmt(l.amount)]),
+                ['Net Cash from Financing Activities', fmt(r.netFinancingCashFlow)],
+                ['', ''],
+                ['Opening Cash Balance', fmt(r.openingCash)],
+                ['Net Change in Cash', fmt(r.netCashFlow)],
+            ];
+            const footerRows = [['Closing Cash Balance', fmt(r.closingCash)]];
+            ExportUtils.addButtons('reportContainer',
+                () => ExportUtils.toPDF('Cash Flow Statement', subtitle, cols, exportRows, `CashFlow_${fromDate.value}_${reportDate.value}`, footerRows),
+                () => ExportUtils.toExcel('Cash Flow', cols, exportRows, `CashFlow_${fromDate.value}_${reportDate.value}`, footerRows)
+            );
+        });
+
+        // ── Account Activity Summary ───────────────────────────────────────────────
+
+        document.getElementById('accountActivityBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+            if (!requireTier('Enterprise')) return;
+
+            UIUtils.showLoading();
+            const response = await ApiService.getAccountActivitySummary(orgId, fromDate.value, reportDate.value);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error'); return; }
+
+            const r = response.data;
+            const subtitle = `Period: ${fmtD(r.fromDate)} – ${fmtD(r.toDate)}`;
+            if (!r.accounts.length) { reportContainer.innerHTML = '<h3>Account Activity Summary</h3><p>No activity in this period.</p>'; return; }
+
+            const monthHeaders = r.accounts[0].months.map(m => `<th style="text-align: right; min-width: 90px;">${m.monthName}</th>`).join('');
+            let html = `<h3>Account Activity Summary</h3><p style="color: var(--secondary-color);">${subtitle}</p>`;
+            html += `<div style="overflow-x: auto;"><table style="width: 100%; min-width: 800px;">
+                <thead><tr>
+                    <th>Code</th><th>Account</th><th>Type</th>
+                    ${monthHeaders}
+                    <th style="text-align: right;">Total Debit</th>
+                    <th style="text-align: right;">Total Credit</th>
+                    <th style="text-align: right;">Net</th>
+                </tr></thead><tbody>`;
+            r.accounts.forEach(a => {
+                html += `<tr>
+                    <td>${a.code}</td><td>${a.name}</td><td>${a.type}</td>
+                    ${a.months.map(m => `<td style="text-align: right; font-size: 0.85em;">${m.net !== 0 ? fmt(m.net) : '–'}</td>`).join('')}
+                    <td style="text-align: right;">${fmt(a.totalDebits)}</td>
+                    <td style="text-align: right;">${fmt(a.totalCredits)}</td>
+                    <td style="text-align: right; font-weight: 600;">${fmt(a.netMovement)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table></div>';
+            reportContainer.innerHTML = html;
+
+            const monthNames = r.accounts[0].months.map(m => m.monthName);
+            const cols = ['Code', 'Account', 'Type', ...monthNames, 'Total Debit', 'Total Credit', 'Net'];
+            const exportRows = r.accounts.map(a => [
+                a.code, a.name, a.type,
+                ...a.months.map(m => fmt(m.net)),
+                fmt(a.totalDebits), fmt(a.totalCredits), fmt(a.netMovement)
+            ]);
+            ExportUtils.addButtons('reportContainer',
+                () => ExportUtils.toPDF('Account Activity Summary', subtitle, cols, exportRows, `AccountActivity_${fromDate.value}_${reportDate.value}`),
+                () => ExportUtils.toExcel('Account Activity', cols, exportRows, `AccountActivity_${fromDate.value}_${reportDate.value}`)
+            );
+        });
+
+        // ── Revenue Breakdown ─────────────────────────────────────────────────────
+
+        document.getElementById('revenueBreakdownBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+            if (!requireTier('Enterprise')) return;
+
+            UIUtils.showLoading();
+            const response = await ApiService.getRevenueBreakdown(orgId, fromDate.value, reportDate.value);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error'); return; }
+
+            const r = response.data;
+            const subtitle = `Period: ${fmtD(r.fromDate)} – ${fmtD(r.toDate)}`;
+            let html = `<h3>Revenue Breakdown by Account</h3><p style="color: var(--secondary-color);">${subtitle}</p>`;
+            html += `<table style="width: 100%;">
+                <thead><tr>
+                    <th>Code</th><th>Account</th><th>Sub-Type</th>
+                    <th style="text-align: right;">Transactions</th>
+                    <th style="text-align: right;">Sales</th>
+                    <th style="text-align: right;">Returns</th>
+                    <th style="text-align: right;">Net Revenue</th>
+                </tr></thead><tbody>`;
+            r.lines.forEach(l => {
+                html += `<tr>
+                    <td>${l.code}</td><td>${l.name}</td><td>${l.subType || '–'}</td>
+                    <td style="text-align: right;">${l.transactionCount}</td>
+                    <td style="text-align: right;">${fmt(l.salesAmount)}</td>
+                    <td style="text-align: right; color: ${l.returnsAmount > 0 ? '#b91c1c' : 'inherit'};">${l.returnsAmount > 0 ? '('+fmt(l.returnsAmount)+')' : '–'}</td>
+                    <td style="text-align: right; font-weight: 600;">${fmt(l.netAmount)}</td>
+                </tr>`;
+            });
+            html += `<tr style="border-top: 2px solid var(--border-color); font-weight: bold;">
+                <td colspan="6">Total Revenue</td>
+                <td style="text-align: right;">${fmt(r.totalRevenue)}</td>
+            </tr></tbody></table>`;
+            reportContainer.innerHTML = html;
+
+            const cols = ['Code', 'Account', 'Sub-Type', 'Transactions', 'Sales', 'Returns', 'Net Revenue'];
+            const exportRows = r.lines.map(l => [l.code, l.name, l.subType || '', l.transactionCount, fmt(l.salesAmount), fmt(l.returnsAmount), fmt(l.netAmount)]);
+            const footerRows = [['', '', '', '', '', 'Total Revenue', fmt(r.totalRevenue)]];
+            ExportUtils.addButtons('reportContainer',
+                () => ExportUtils.toPDF('Revenue Breakdown', subtitle, cols, exportRows, `RevenueBreakdown_${fromDate.value}_${reportDate.value}`, footerRows),
+                () => ExportUtils.toExcel('Revenue Breakdown', cols, exportRows, `RevenueBreakdown_${fromDate.value}_${reportDate.value}`, footerRows)
+            );
+        });
+
+        // ── Daybook Audit ─────────────────────────────────────────────────────────
+
+        document.getElementById('daybookAuditBtn').addEventListener('click', async () => {
+            const orgId = ApiService.getSelectedOrg();
+            if (!orgId) { UIUtils.showAlert('Please select an organisation', 'error'); return; }
+            if (!requireTier('Enterprise')) return;
+
+            UIUtils.showLoading();
+            const response = await ApiService.getDaybookAudit(orgId, fromDate.value, reportDate.value);
+            UIUtils.hideLoading();
+            if (!response.ok) { UIUtils.showAlert(UIUtils.getErrorMessage(response.data), 'error'); return; }
+
+            const r = response.data;
+            const subtitle = `Period: ${fmtD(r.fromDate)} – ${fmtD(r.toDate)}`;
+            let html = `<h3>Daybook Activity Audit</h3>
+                <p style="color: var(--secondary-color);">${subtitle}</p>
+                <div style="display: flex; gap: 24px; margin-bottom: 16px;">
+                    <span>Total entries: <strong>${r.totalEntries}</strong></span>
+                    <span style="color: #15803d;">Posted: <strong>${r.postedEntries}</strong></span>
+                    <span style="color: #b45309;">Draft: <strong>${r.draftEntries}</strong></span>
+                </div>`;
+            html += `<table style="width: 100%;">
+                <thead><tr>
+                    <th>Date</th><th>Type</th><th>Ref</th><th>External Ref</th>
+                    <th>Customer / Supplier</th><th>Description</th>
+                    <th style="text-align: right;">Debits</th>
+                    <th style="text-align: right;">Credits</th>
+                    <th style="text-align: center;">Lines</th>
+                    <th style="text-align: center;">Status</th>
+                    <th>Created</th>
+                </tr></thead><tbody>`;
+            r.entries.forEach(e => {
+                const party = e.customerName || e.supplierName || '–';
+                const statusStyle = e.isPosted ? 'color: #15803d; font-weight: 600;' : 'color: #b45309;';
+                html += `<tr style="${!e.isPosted ? 'opacity: 0.75;' : ''}">
+                    <td>${fmtD(e.entryDate)}</td>
+                    <td><code style="font-size: 0.8em; background: var(--light-bg); padding: 2px 5px; border-radius: 3px;">${e.type}</code></td>
+                    <td>${e.referenceNumber || '–'}</td>
+                    <td>${e.externalReference || '–'}</td>
+                    <td>${party}</td>
+                    <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${e.description}">${e.description || '–'}</td>
+                    <td style="text-align: right;">${fmt(e.totalDebits)}</td>
+                    <td style="text-align: right;">${fmt(e.totalCredits)}</td>
+                    <td style="text-align: center;">${e.lineCount}</td>
+                    <td style="text-align: center; ${statusStyle}">${e.isPosted ? 'Posted' : 'Draft'}</td>
+                    <td style="font-size: 0.8em; color: var(--secondary-color);">${fmtD(e.createdAt)}</td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            reportContainer.innerHTML = html;
+
+            const cols = ['Date', 'Type', 'Ref', 'External Ref', 'Customer/Supplier', 'Description', 'Debits', 'Credits', 'Lines', 'Status', 'Created'];
+            const exportRows = r.entries.map(e => [
+                fmtD(e.entryDate), e.type, e.referenceNumber || '', e.externalReference || '',
+                e.customerName || e.supplierName || '', e.description || '',
+                fmt(e.totalDebits), fmt(e.totalCredits), e.lineCount,
+                e.isPosted ? 'Posted' : 'Draft', fmtD(e.createdAt)
+            ]);
+            ExportUtils.addButtons('reportContainer',
+                () => ExportUtils.toPDF('Daybook Audit', subtitle, cols, exportRows, `DaybookAudit_${fromDate.value}_${reportDate.value}`),
+                () => ExportUtils.toExcel('Daybook Audit', cols, exportRows, `DaybookAudit_${fromDate.value}_${reportDate.value}`)
+            );
+        });
+
+        // ── Organisation selector ─────────────────────────────────────────────────
+
+        async function loadOrgTier(orgId) {
+            if (!orgId) return;
+            const res = await ApiService.getOrganisation(orgId);
+            if (res.ok && res.data?.subscriptionTier) {
+                updateTierBadges(res.data.subscriptionTier);
+            }
+        }
+
+        document.getElementById('organisationSelect').addEventListener('change', (e) => {
+            if (e.target.value) {
+                ApiService.setSelectedOrg(e.target.value);
+                loadOrgTier(e.target.value);
+            }
+        });
+
+        const orgRes = await ApiService.populateOrganisationSelector();
+        const savedOrg = ApiService.getSelectedOrg();
+        if (savedOrg) loadOrgTier(savedOrg);
 
         document.getElementById('logoutBtn').addEventListener('click', (e) => {
             e.preventDefault();

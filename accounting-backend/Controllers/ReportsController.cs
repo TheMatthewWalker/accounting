@@ -68,4 +68,95 @@ public class ReportsController : ControllerBase
         var result = await _service.GetBalanceSheetAsync(organisationId, date);
         return Ok(result);
     }
+
+    // ── Pro Tier Reports ──────────────────────────────────────────────────────
+
+    [HttpGet("aged-debtors")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetAgedDebtors(Guid organisationId, [FromQuery] DateTime? asOfDate)
+    {
+        var date = asOfDate ?? DateTime.UtcNow;
+        var result = await _service.GetAgedDebtorsAsync(organisationId, date);
+        return Ok(result);
+    }
+
+    [HttpGet("aged-creditors")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetAgedCreditors(Guid organisationId, [FromQuery] DateTime? asOfDate)
+    {
+        var date = asOfDate ?? DateTime.UtcNow;
+        var result = await _service.GetAgedCreditorsAsync(organisationId, date);
+        return Ok(result);
+    }
+
+    [HttpGet("vat-return")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetVatReturn(Guid organisationId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate)
+    {
+        var result = await _service.GetVatReturnAsync(organisationId, fromDate, toDate);
+        return Ok(result);
+    }
+
+    [HttpGet("income-by-customer")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetIncomeByCustomer(Guid organisationId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate)
+    {
+        var result = await _service.GetIncomeByCustomerAsync(organisationId, fromDate, toDate);
+        return Ok(result);
+    }
+
+    [HttpGet("spend-by-supplier")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetSpendBySupplier(Guid organisationId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate)
+    {
+        var result = await _service.GetSpendBySupplierAsync(organisationId, fromDate, toDate);
+        return Ok(result);
+    }
+
+    // ── Enterprise Tier Reports ───────────────────────────────────────────────
+
+    [HttpGet("comparative-pl")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetComparativeProfitAndLoss(
+        Guid organisationId,
+        [FromQuery] DateTime period1From,
+        [FromQuery] DateTime period1To,
+        [FromQuery] DateTime period2From,
+        [FromQuery] DateTime period2To)
+    {
+        var result = await _service.GetComparativeProfitAndLossAsync(organisationId, period1From, period1To, period2From, period2To);
+        return Ok(result);
+    }
+
+    [HttpGet("cash-flow")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetCashFlowStatement(Guid organisationId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate)
+    {
+        var result = await _service.GetCashFlowStatementAsync(organisationId, fromDate, toDate);
+        return Ok(result);
+    }
+
+    [HttpGet("account-activity")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetAccountActivitySummary(Guid organisationId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate)
+    {
+        var result = await _service.GetAccountActivitySummaryAsync(organisationId, fromDate, toDate);
+        return Ok(result);
+    }
+
+    [HttpGet("revenue-breakdown")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetRevenueBreakdown(Guid organisationId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate)
+    {
+        var result = await _service.GetRevenueBreakdownAsync(organisationId, fromDate, toDate);
+        return Ok(result);
+    }
+
+    [HttpGet("daybook-audit")]
+    [RequireOrganisationRole("Viewer")]
+    public async Task<IActionResult> GetDaybookAudit(Guid organisationId, [FromQuery] DateTime fromDate, [FromQuery] DateTime toDate)
+    {
+        var result = await _service.GetDaybookAuditAsync(organisationId, fromDate, toDate);
+        return Ok(result);
+    }
 }

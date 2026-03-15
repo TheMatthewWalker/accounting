@@ -17,6 +17,10 @@
         .form-hint { font-size: 12px; color: var(--secondary-color); margin-bottom: 15px; padding: 8px 12px; background: #e8f4f8; border-radius: 4px; border-left: 3px solid var(--primary-color); }
         .section-divider { border: none; border-top: 1px solid var(--border-color); margin: 20px 0; }
         .adv-toggle { font-size: 12px; color: var(--primary-color); cursor: pointer; text-decoration: underline; }
+        .payment-method-toggle { display: flex; gap: 0; margin-bottom: 15px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color); width: fit-content; }
+        .payment-method-toggle button { padding: 7px 16px; border: none; background: white; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--secondary-color); transition: background 0.15s, color 0.15s; }
+        .payment-method-toggle button.active { background: var(--primary-color); color: white; }
+        .payment-method-toggle button:not(:last-child) { border-right: 1px solid var(--border-color); }
     </style>
 </head>
 <body>
@@ -62,19 +66,28 @@
             <!-- SALES INVOICE FORM -->
             <div id="form-sales" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Sales Invoice</h3>
-                <p class="form-hint">Accounts Receivable is debited automatically. Credits go to your Sales account. VAT is handled via your VAT Control account.</p>
+                <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Payment Method</label>
+                <div class="payment-method-toggle" style="margin-bottom:12px;">
+                    <button class="active" onclick="setPaymentMethod('sales','credit')">Credit (Invoice)</button>
+                    <button onclick="setPaymentMethod('sales','immediate')">Immediate Payment</button>
+                </div>
+                <p class="form-hint" id="sales-hint">Accounts Receivable is debited automatically. Credits go to your Sales account. VAT is handled via your VAT Control account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                    <div class="form-group">
-                        <label>Customer *</label>
+                    <div class="form-group" id="sales-customer-group">
+                        <label id="sales-customer-label">Customer *</label>
                         <select id="sales-customer"><option value="">Select customer</option></select>
+                    </div>
+                    <div class="form-group" id="sales-payment-account-group" style="display:none;">
+                        <label>Payment Account * <span style="font-weight:400;color:var(--secondary-color)">(cash / bank)</span></label>
+                        <select id="sales-payment-account"><option value="">Select asset account</option></select>
                     </div>
                     <div class="form-group">
                         <label>Invoice Date *</label>
                         <input type="date" id="sales-date">
                     </div>
                     <div class="form-group">
-                        <label>Invoice / Reference No.</label>
-                        <input type="text" id="sales-ref" placeholder="INV-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="sales-ref" placeholder="Customer PO, your own ref, etc.">
                     </div>
                     <div class="form-group" style="grid-column: span 3;">
                         <label>Description (optional)</label>
@@ -97,19 +110,34 @@
             <!-- SALES RETURN FORM -->
             <div id="form-sales-return" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Sales Return / Credit Note</h3>
-                <p class="form-hint">Reduces what the customer owes (credits Accounts Receivable). Debits the Sales Returns account.</p>
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label style="font-size:13px; font-weight:600;">Original Sales Invoice *</label>
+                    <select id="sales-return-original" style="width:100%; margin-top:4px;" onchange="onOriginalSalesSelected()">
+                        <option value="">Select the original sales invoice to return against…</option>
+                    </select>
+                </div>
+                <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Payment Method</label>
+                <div class="payment-method-toggle" style="margin-bottom:12px;">
+                    <button class="active" onclick="setPaymentMethod('sales-return','credit')">Credit (Credit Note)</button>
+                    <button onclick="setPaymentMethod('sales-return','immediate')">Immediate Refund</button>
+                </div>
+                <p class="form-hint" id="sales-return-hint">Reduces what the customer owes (credits Accounts Receivable). Debits the Sales Returns account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                    <div class="form-group">
-                        <label>Customer *</label>
+                    <div class="form-group" id="sales-return-customer-group">
+                        <label id="sales-return-customer-label">Customer *</label>
                         <select id="sales-return-customer"><option value="">Select customer</option></select>
+                    </div>
+                    <div class="form-group" id="sales-return-payment-account-group" style="display:none;">
+                        <label>Refund Account * <span style="font-weight:400;color:var(--secondary-color)">(cash / bank)</span></label>
+                        <select id="sales-return-payment-account"><option value="">Select asset account</option></select>
                     </div>
                     <div class="form-group">
                         <label>Date *</label>
                         <input type="date" id="sales-return-date">
                     </div>
                     <div class="form-group">
-                        <label>Credit Note / Reference No.</label>
-                        <input type="text" id="sales-return-ref" placeholder="CN-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="sales-return-ref" placeholder="Customer ref, etc.">
                     </div>
                     <div class="form-group" style="grid-column: span 3;">
                         <label>Description (optional)</label>
@@ -132,19 +160,28 @@
             <!-- PURCHASE INVOICE FORM -->
             <div id="form-purchase" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Purchase Invoice</h3>
-                <p class="form-hint">Trade Payables is credited automatically. Debits go to your Purchases account. VAT is reclaimed via your VAT Control account.</p>
+                <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Payment Method</label>
+                <div class="payment-method-toggle" style="margin-bottom:12px;">
+                    <button class="active" onclick="setPaymentMethod('purchase','credit')">Credit (Invoice)</button>
+                    <button onclick="setPaymentMethod('purchase','immediate')">Immediate Payment</button>
+                </div>
+                <p class="form-hint" id="purchase-hint">Trade Payables is credited automatically. Debits go to your Purchases account. VAT is reclaimed via your VAT Control account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                    <div class="form-group">
-                        <label>Supplier *</label>
+                    <div class="form-group" id="purchase-supplier-group">
+                        <label id="purchase-supplier-label">Supplier *</label>
                         <select id="purchase-supplier"><option value="">Select supplier</option></select>
+                    </div>
+                    <div class="form-group" id="purchase-payment-account-group" style="display:none;">
+                        <label>Payment Account * <span style="font-weight:400;color:var(--secondary-color)">(cash / bank)</span></label>
+                        <select id="purchase-payment-account"><option value="">Select asset account</option></select>
                     </div>
                     <div class="form-group">
                         <label>Invoice Date *</label>
                         <input type="date" id="purchase-date">
                     </div>
                     <div class="form-group">
-                        <label>Supplier Invoice No.</label>
-                        <input type="text" id="purchase-ref" placeholder="SINV-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(supplier invoice no.)</span></label>
+                        <input type="text" id="purchase-ref" placeholder="e.g. SINV-001">
                     </div>
                     <div class="form-group" style="grid-column: span 3;">
                         <label>Description (optional)</label>
@@ -167,19 +204,34 @@
             <!-- PURCHASE RETURN FORM -->
             <div id="form-purchase-return" class="entry-form" style="display:none; background: var(--light-bg); padding: 20px; border-radius: 8px; margin-bottom: 20px;">
                 <h3>Purchase Return / Debit Note</h3>
-                <p class="form-hint">Reduces what you owe the supplier (debits Trade Payables). Credits go to your Purchase Returns account.</p>
+                <div class="form-group" style="margin-bottom:16px;">
+                    <label style="font-size:13px; font-weight:600;">Original Purchase Invoice *</label>
+                    <select id="purchase-return-original" style="width:100%; margin-top:4px;" onchange="onOriginalPurchaseSelected()">
+                        <option value="">Select the original purchase invoice to return against…</option>
+                    </select>
+                </div>
+                <label style="font-size:13px; font-weight:600; display:block; margin-bottom:6px;">Payment Method</label>
+                <div class="payment-method-toggle" style="margin-bottom:12px;">
+                    <button class="active" onclick="setPaymentMethod('purchase-return','credit')">Credit (Debit Note)</button>
+                    <button onclick="setPaymentMethod('purchase-return','immediate')">Immediate Refund</button>
+                </div>
+                <p class="form-hint" id="purchase-return-hint">Reduces what you owe the supplier (debits Trade Payables). Credits go to your Purchase Returns account.</p>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 15px;">
-                    <div class="form-group">
-                        <label>Supplier *</label>
+                    <div class="form-group" id="purchase-return-supplier-group">
+                        <label id="purchase-return-supplier-label">Supplier *</label>
                         <select id="purchase-return-supplier"><option value="">Select supplier</option></select>
+                    </div>
+                    <div class="form-group" id="purchase-return-payment-account-group" style="display:none;">
+                        <label>Refund Account * <span style="font-weight:400;color:var(--secondary-color)">(cash / bank)</span></label>
+                        <select id="purchase-return-payment-account"><option value="">Select asset account</option></select>
                     </div>
                     <div class="form-group">
                         <label>Date *</label>
                         <input type="date" id="purchase-return-date">
                     </div>
                     <div class="form-group">
-                        <label>Debit Note / Reference No.</label>
-                        <input type="text" id="purchase-return-ref" placeholder="DN-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="purchase-return-ref" placeholder="Supplier ref, etc.">
                     </div>
                     <div class="form-group" style="grid-column: span 3;">
                         <label>Description (optional)</label>
@@ -221,8 +273,8 @@
                         <input type="number" id="rcpt-amount" step="0.01" min="0.01" placeholder="0.00">
                     </div>
                     <div class="form-group">
-                        <label>Reference</label>
-                        <input type="text" id="rcpt-ref" placeholder="REC-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="rcpt-ref" placeholder="Bank transaction ref, etc.">
                     </div>
                     <div class="form-group">
                         <label>Description</label>
@@ -257,8 +309,8 @@
                         <input type="number" id="pay-amount" step="0.01" min="0.01" placeholder="0.00">
                     </div>
                     <div class="form-group">
-                        <label>Reference</label>
-                        <input type="text" id="pay-ref" placeholder="PAY-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="pay-ref" placeholder="Bank transaction ref, etc.">
                     </div>
                     <div class="form-group">
                         <label>Description</label>
@@ -281,8 +333,8 @@
                         <input type="date" id="jnl-date">
                     </div>
                     <div class="form-group">
-                        <label>Reference</label>
-                        <input type="text" id="jnl-ref" placeholder="JNL-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="jnl-ref" placeholder="Your ref, etc.">
                     </div>
                     <div class="form-group">
                         <label>Description</label>
@@ -309,6 +361,7 @@
                             <th>Date</th>
                             <th>Type</th>
                             <th>Reference</th>
+                        <th>Ext. Ref</th>
                             <th>Description</th>
                             <th>Amount</th>
                             <th>Status</th>
@@ -316,7 +369,7 @@
                         </tr>
                     </thead>
                     <tbody id="entriesTable">
-                        <tr><td colspan="7" style="text-align: center; color: var(--secondary-color);">Loading...</td></tr>
+                        <tr><td colspan="8" style="text-align: center; color: var(--secondary-color);">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -332,11 +385,66 @@
         let customers = [];
         let suppliers = [];
         let products = [];
+        let daybookEntries = [];
         let orgVatSettings = { defaultVatAccountId: null, vatReducedRate: 5, vatFullRate: 20 };
 
         function escHtml(str) {
             return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
         }
+
+        // ---- Payment method state ----
+        const paymentMethods = { 'sales': 'credit', 'sales-return': 'credit', 'purchase': 'credit', 'purchase-return': 'credit' };
+
+        const paymentHints = {
+            sales: {
+                credit:    'Accounts Receivable is debited automatically. Credits go to your Sales account. VAT is handled via your VAT Control account.',
+                immediate: 'Immediate payment: the chosen asset account (e.g. Bank or Cash) is debited directly. No AR entry is created. Credits go to your Sales account.'
+            },
+            'sales-return': {
+                credit:    'Reduces what the customer owes (credits Accounts Receivable). Debits the Sales Returns account.',
+                immediate: 'Immediate refund: the chosen asset account (e.g. Bank or Cash) is credited directly. No AR entry is created. Debits go to your Sales Returns account.'
+            },
+            purchase: {
+                credit:    'Trade Payables is credited automatically. Debits go to your Purchases account. VAT is reclaimed via your VAT Control account.',
+                immediate: 'Immediate payment: the chosen asset account (e.g. Bank or Cash) is credited directly. No AP entry is created. Debits go to your Purchases account.'
+            },
+            'purchase-return': {
+                credit:    'Reduces what you owe the supplier (debits Trade Payables). Credits go to your Purchase Returns account.',
+                immediate: 'Immediate refund: the chosen asset account (e.g. Bank or Cash) is debited directly. No AP entry is created. Credits go to your Purchase Returns account.'
+            }
+        };
+
+        window.setPaymentMethod = (formType, method) => {
+            paymentMethods[formType] = method;
+            const isSale = formType === 'sales' || formType === 'sales-return';
+            const entityType = isSale ? 'customer' : 'supplier';
+            const prefix = formType; // e.g. 'sales', 'purchase-return'
+
+            // Toggle buttons
+            const toggle = document.querySelector(`#form-${formType} .payment-method-toggle`);
+            if (toggle) toggle.querySelectorAll('button').forEach((btn, i) => {
+                btn.classList.toggle('active', (i === 0 && method === 'credit') || (i === 1 && method === 'immediate'));
+            });
+
+            // Update hint
+            const hintEl = document.getElementById(`${prefix}-hint`);
+            if (hintEl) hintEl.textContent = paymentHints[formType][method];
+
+            // Show/hide entity (customer/supplier) vs payment account fields
+            const entityGroup = document.getElementById(`${prefix}-${entityType}-group`);
+            const payGroup = document.getElementById(`${prefix}-payment-account-group`);
+            const entityLabel = document.getElementById(`${prefix}-${entityType}-label`);
+
+            if (method === 'immediate') {
+                if (entityGroup) entityGroup.style.display = 'none';
+                if (payGroup) payGroup.style.display = '';
+            } else {
+                if (entityGroup) entityGroup.style.display = '';
+                if (payGroup) payGroup.style.display = 'none';
+                // Restore required label
+                if (entityLabel) entityLabel.textContent = `${isSale ? 'Customer' : 'Supplier'} *`;
+            }
+        };
 
         // ---- Form show/hide ----
         window.showForm = (type) => {
@@ -344,12 +452,25 @@
             document.getElementById(`form-${type}`).style.display = 'block';
             document.getElementById(`form-${type}`).scrollIntoView({ behavior: 'smooth' });
             if (type === 'sales' && document.getElementById('sales-lines').children.length === 0) window.addSalesLine();
-            if (type === 'sales-return' && document.getElementById('sales-return-lines').children.length === 0) window.addSalesReturnLine();
+            // Returns: don't pre-add a blank line — lines are populated when original is selected
             if (type === 'purchase' && document.getElementById('purchase-lines').children.length === 0) window.addPurchLine();
-            if (type === 'purchase-return' && document.getElementById('purchase-return-lines').children.length === 0) window.addPurchReturnLine();
         };
         window.hideForm = (type) => {
             document.getElementById(`form-${type}`).style.display = 'none';
+            if (paymentMethods[type] !== undefined) setPaymentMethod(type, 'credit');
+            // Reset original invoice/bill selectors and clear pre-populated lines
+            if (type === 'sales-return') {
+                const sel = document.getElementById('sales-return-original');
+                if (sel) sel.value = '';
+                document.getElementById('sales-return-lines').innerHTML = '';
+                srCount = 0;
+            }
+            if (type === 'purchase-return') {
+                const sel = document.getElementById('purchase-return-original');
+                if (sel) sel.value = '';
+                document.getElementById('purchase-return-lines').innerHTML = '';
+                prCount = 0;
+            }
         };
 
         // ---- Account options helpers ----
@@ -467,19 +588,137 @@
             return lines;
         }
 
+        // ---- Populate original invoice/bill selects ----
+        function populateOriginalSelects() {
+            const fmtEntry = (e, nameField) => {
+                const label = [e.referenceNumber, e[nameField] || e.description].filter(Boolean).join(' — ');
+                return `<option value="${e.id}">${escHtml(label)} (${UIUtils.formatDate(e.entryDate)})</option>`;
+            };
+            const salesOpts = daybookEntries.filter(e => e.type === 'Sales').map(e => fmtEntry(e, 'customerName')).join('');
+            document.getElementById('sales-return-original').innerHTML =
+                '<option value="">Select the original sales invoice to return against…</option>' + salesOpts;
+
+            const purchOpts = daybookEntries.filter(e => e.type === 'Purchase').map(e => fmtEntry(e, 'supplierName')).join('');
+            document.getElementById('purchase-return-original').innerHTML =
+                '<option value="">Select the original purchase invoice to return against…</option>' + purchOpts;
+        }
+
+        // Parse revenue/expense lines from an original entry's journal lines.
+        // "primary" lines are the non-AR/AP side (the CR lines for sales, DR lines for purchases).
+        // VAT lines are identified by narrationLine starting with "VAT on ".
+        function parseOriginalLines(entry, primarySide) {
+            // primarySide: 'credit' for sales (find CR lines), 'debit' for purchases (find DR lines)
+            const isCredit = primarySide === 'credit';
+            const primaryLines = (entry.lines || []).filter(l =>
+                isCredit ? l.creditAmount > 0 : l.debitAmount > 0
+            );
+            const vatLines = primaryLines.filter(l => l.narrationLine?.startsWith('VAT on '));
+            const revLines = primaryLines.filter(l => !l.narrationLine?.startsWith('VAT on '));
+
+            return revLines.map(rev => {
+                const netAmount = isCredit ? rev.creditAmount : rev.debitAmount;
+                const vatNarration = `VAT on ${rev.narrationLine}`;
+                const vatLine = vatLines.find(v => v.narrationLine === vatNarration);
+                const vatAmount = vatLine ? (isCredit ? vatLine.creditAmount : vatLine.debitAmount) : 0;
+
+                let vatTreatment = 'exempt';
+                if (vatAmount > 0 && netAmount > 0) {
+                    const rate = Math.round(vatAmount / netAmount * 100);
+                    if (rate === orgVatSettings.vatFullRate) vatTreatment = 'standard';
+                    else if (rate === orgVatSettings.vatReducedRate) vatTreatment = 'reduced';
+                    else vatTreatment = 'zero';
+                }
+                return { description: rev.narrationLine || '', unitPrice: netAmount, vatTreatment };
+            });
+        }
+
+        function prefillReturnForm(formPrefix, entry, entityType, addLineFn, updateFn, priceField, lineSuffix) {
+            // Customer/supplier
+            const entSel = document.getElementById(`${formPrefix}-${entityType}`);
+            if (entSel && entry[`${entityType}Id`]) {
+                entSel.value = entry[`${entityType}Id`];
+            }
+            // Date (today)
+            document.getElementById(`${formPrefix}-date`).value = new Date().toISOString().split('T')[0];
+            // External reference — pre-fill with original's internal ref for traceability
+            document.getElementById(`${formPrefix}-ref`).value = entry.referenceNumber ? `Re: ${entry.referenceNumber}` : '';
+            // Description
+            document.getElementById(`${formPrefix}-desc`).value = entry.description ? `Return: ${entry.description}` : '';
+
+            // Lines
+            const tbody = document.getElementById(`${formPrefix}-lines`);
+            tbody.innerHTML = '';
+            const parsed = parseOriginalLines(entry, formPrefix === 'sales-return' ? 'credit' : 'debit');
+
+            if (parsed.length === 0) {
+                // Fallback: one line with total debit amount
+                addLineFn();
+            } else {
+                parsed.forEach(({ description, unitPrice, vatTreatment }, idx) => {
+                    addLineFn();
+                    // The line was inserted at the end — find last row
+                    const rows = tbody.querySelectorAll('tr');
+                    const row = rows[rows.length - 1];
+                    if (row) {
+                        row.querySelector('input[type=text]').value = description;
+                        row.querySelector('.price').value = unitPrice.toFixed(2);
+                        row.querySelector('.vat-sel').value = vatTreatment;
+                    }
+                });
+            }
+            window[updateFn]();
+        }
+
+        window.onOriginalSalesSelected = () => {
+            const entryId = document.getElementById('sales-return-original').value;
+            if (!entryId) return;
+            const entry = daybookEntries.find(e => e.id === entryId);
+            if (!entry) return;
+            prefillReturnForm('sales-return', entry, 'customer', window.addSalesReturnLine, 'updateSalesReturnTotal', 'sale', 'sr');
+        };
+
+        window.onOriginalPurchaseSelected = () => {
+            const entryId = document.getElementById('purchase-return-original').value;
+            if (!entryId) return;
+            const entry = daybookEntries.find(e => e.id === entryId);
+            if (!entry) return;
+            prefillReturnForm('purchase-return', entry, 'supplier', window.addPurchReturnLine, 'updatePurchReturnTotal', 'purchase', 'pr');
+        };
+
         // ---- Submit simple invoice ----
         window.submitSimple = async (formType) => {
             const orgId = ApiService.getSelectedOrg();
             if (!orgId) { UIUtils.showAlert('Select an organisation first', 'error'); return; }
 
             const isSale = formType === 'sales' || formType === 'sales-return';
-            const entityId = isSale
-                ? document.getElementById(`${formType}-customer`)?.value
-                : document.getElementById(`${formType}-supplier`)?.value;
+            const method = paymentMethods[formType] || 'credit';
+            const isImmediate = method === 'immediate';
+
             const date = document.getElementById(`${formType}-date`).value;
-            if (!entityId || !date) {
-                UIUtils.showAlert(`${isSale ? 'Customer' : 'Supplier'} and date are required`, 'error');
-                return;
+            if (!date) { UIUtils.showAlert('Date is required', 'error'); return; }
+
+            let entityPayload = {};
+            if (isImmediate) {
+                const paymentAccountId = document.getElementById(`${formType}-payment-account`)?.value;
+                if (!paymentAccountId) {
+                    UIUtils.showAlert('Payment account is required for immediate payment', 'error');
+                    return;
+                }
+                entityPayload = { immediatePayment: true, immediatePaymentAccountId: paymentAccountId };
+                // Optionally include customer/supplier if selected (for record-keeping)
+                const entityId = isSale
+                    ? document.getElementById(`${formType}-customer`)?.value
+                    : document.getElementById(`${formType}-supplier`)?.value;
+                if (entityId) entityPayload = { ...entityPayload, ...(isSale ? { customerId: entityId } : { supplierId: entityId }) };
+            } else {
+                const entityId = isSale
+                    ? document.getElementById(`${formType}-customer`)?.value
+                    : document.getElementById(`${formType}-supplier`)?.value;
+                if (!entityId) {
+                    UIUtils.showAlert(`${isSale ? 'Customer' : 'Supplier'} is required for credit payment`, 'error');
+                    return;
+                }
+                entityPayload = { immediatePayment: false, ...(isSale ? { customerId: entityId } : { supplierId: entityId }) };
             }
 
             const tbodyId = `${formType}-lines`;
@@ -487,11 +726,22 @@
             const lines = buildSimpleLines(tbodyId, priceField);
             if (lines.length === 0) { UIUtils.showAlert('Add at least one line with qty and price', 'error'); return; }
 
+            // For return types, require and include the original entry link
+            let linkedDaybookEntryId = null;
+            if (formType === 'sales-return') {
+                linkedDaybookEntryId = document.getElementById('sales-return-original')?.value || null;
+                if (!linkedDaybookEntryId) { UIUtils.showAlert('Please select the original sales invoice', 'error'); return; }
+            } else if (formType === 'purchase-return') {
+                linkedDaybookEntryId = document.getElementById('purchase-return-original')?.value || null;
+                if (!linkedDaybookEntryId) { UIUtils.showAlert('Please select the original purchase invoice', 'error'); return; }
+            }
+
             const payload = {
                 entryDate: date,
-                referenceNumber: document.getElementById(`${formType}-ref`)?.value || null,
+                externalReference: document.getElementById(`${formType}-ref`)?.value || null,
                 description: document.getElementById(`${formType}-desc`)?.value || null,
-                ...(isSale ? { customerId: entityId } : { supplierId: entityId }),
+                ...entityPayload,
+                ...(linkedDaybookEntryId ? { linkedDaybookEntryId } : {}),
                 lines
             };
 
@@ -531,7 +781,7 @@
             UIUtils.showLoading();
             const response = await ApiService.createReceiptDaybookEntry(orgId, {
                 bankAccountId, creditAccountId, entryDate: date, amount,
-                referenceNumber: document.getElementById('rcpt-ref').value || null,
+                externalReference: document.getElementById('rcpt-ref').value || null,
                 description: document.getElementById('rcpt-desc').value || null,
             });
             UIUtils.hideLoading();
@@ -553,7 +803,7 @@
             UIUtils.showLoading();
             const response = await ApiService.createPaymentDaybookEntry(orgId, {
                 bankAccountId, debitAccountId, entryDate: date, amount,
-                referenceNumber: document.getElementById('pay-ref').value || null,
+                externalReference: document.getElementById('pay-ref').value || null,
                 description: document.getElementById('pay-desc').value || null,
             });
             UIUtils.hideLoading();
@@ -604,7 +854,7 @@
             UIUtils.showLoading();
             const response = await ApiService.createDaybookEntry(orgId, {
                 type: 'Journal', entryDate: date,
-                referenceNumber: document.getElementById('jnl-ref').value || null,
+                externalReference: document.getElementById('jnl-ref').value || null,
                 description: document.getElementById('jnl-desc').value || null,
                 lines
             });
@@ -698,6 +948,11 @@
                 populateSelect('rcpt-credit', allOpts());
                 populateSelect('pay-bank', assetOpts());
                 populateSelect('pay-debit', allOpts());
+                // Immediate payment asset account selects
+                populateSelect('sales-payment-account', assetOpts());
+                populateSelect('sales-return-payment-account', assetOpts());
+                populateSelect('purchase-payment-account', assetOpts());
+                populateSelect('purchase-return-payment-account', assetOpts());
             }
 
             if (prodRes.ok) products = prodRes.data;
@@ -719,9 +974,11 @@
 
             if (!entriesRes.ok) return;
             const entries = entriesRes.data;
+            daybookEntries = entries;
+            populateOriginalSelects();
             const tbody = document.getElementById('entriesTable');
             if (entries.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No entries yet. Use the buttons above to create one.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No entries yet. Use the buttons above to create one.</td></tr>';
                 return;
             }
             const typeLabels = {
@@ -775,7 +1032,8 @@
                     <tr onclick="toggleJournalLines(this)" style="cursor:pointer;" title="Click to view journal entries">
                         <td>${UIUtils.formatDate(entry.entryDate)}</td>
                         <td>${typeLabel}</td>
-                        <td>${escHtml(entry.referenceNumber || '-')}</td>
+                        <td><strong>${escHtml(entry.referenceNumber || '-')}</strong></td>
+                        <td>${escHtml(entry.externalReference || '')}</td>
                         <td>${displayDesc}${subDesc}</td>
                         <td>${UIUtils.formatCurrency(totalDebit)}</td>
                         <td>${entry.isPosted ? '<span style="color:var(--success-color);">✓ Posted</span>' : '<span style="color:var(--warning-color);">⏳ Draft</span>'}</td>
@@ -786,7 +1044,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="journal-detail" style="display:none;"><td colspan="7" style="padding:0;">${detailContent}</td></tr>`;
+                    <tr class="journal-detail" style="display:none;"><td colspan="8" style="padding:0;">${detailContent}</td></tr>`;
             }).join('');
         }
 

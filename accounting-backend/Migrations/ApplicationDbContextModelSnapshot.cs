@@ -133,6 +133,9 @@ namespace AccountingApp.Migrations
                     b.Property<Guid>("OrganisationId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("ExternalReference")
+                        .HasColumnType("text");
+
                     b.Property<string>("ReferenceNumber")
                         .HasColumnType("text");
 
@@ -398,6 +401,22 @@ namespace AccountingApp.Migrations
                     b.HasIndex("OrganisationId");
 
                     b.ToTable("Products");
+                });
+
+            modelBuilder.Entity("AccountingApp.Models.DaybookSequence", b =>
+                {
+                    b.Property<Guid>("OrganisationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntryType")
+                        .HasColumnType("text");
+
+                    b.Property<int>("LastNumber")
+                        .HasColumnType("integer");
+
+                    b.HasKey("OrganisationId", "EntryType");
+
+                    b.ToTable("DaybookSequences");
                 });
 
             modelBuilder.Entity("AccountingApp.Models.Supplier", b =>
