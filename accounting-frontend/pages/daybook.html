@@ -86,8 +86,8 @@
                         <input type="date" id="sales-date">
                     </div>
                     <div class="form-group">
-                        <label>Invoice / Reference No.</label>
-                        <input type="text" id="sales-ref" placeholder="INV-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="sales-ref" placeholder="Customer PO, your own ref, etc.">
                     </div>
                     <div class="form-group" style="grid-column: span 3;">
                         <label>Description (optional)</label>
@@ -136,8 +136,8 @@
                         <input type="date" id="sales-return-date">
                     </div>
                     <div class="form-group">
-                        <label>Credit Note / Reference No.</label>
-                        <input type="text" id="sales-return-ref" placeholder="CN-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="sales-return-ref" placeholder="Customer ref, etc.">
                     </div>
                     <div class="form-group" style="grid-column: span 3;">
                         <label>Description (optional)</label>
@@ -180,8 +180,8 @@
                         <input type="date" id="purchase-date">
                     </div>
                     <div class="form-group">
-                        <label>Supplier Invoice No.</label>
-                        <input type="text" id="purchase-ref" placeholder="SINV-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(supplier invoice no.)</span></label>
+                        <input type="text" id="purchase-ref" placeholder="e.g. SINV-001">
                     </div>
                     <div class="form-group" style="grid-column: span 3;">
                         <label>Description (optional)</label>
@@ -230,8 +230,8 @@
                         <input type="date" id="purchase-return-date">
                     </div>
                     <div class="form-group">
-                        <label>Debit Note / Reference No.</label>
-                        <input type="text" id="purchase-return-ref" placeholder="DN-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="purchase-return-ref" placeholder="Supplier ref, etc.">
                     </div>
                     <div class="form-group" style="grid-column: span 3;">
                         <label>Description (optional)</label>
@@ -273,8 +273,8 @@
                         <input type="number" id="rcpt-amount" step="0.01" min="0.01" placeholder="0.00">
                     </div>
                     <div class="form-group">
-                        <label>Reference</label>
-                        <input type="text" id="rcpt-ref" placeholder="REC-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="rcpt-ref" placeholder="Bank transaction ref, etc.">
                     </div>
                     <div class="form-group">
                         <label>Description</label>
@@ -309,8 +309,8 @@
                         <input type="number" id="pay-amount" step="0.01" min="0.01" placeholder="0.00">
                     </div>
                     <div class="form-group">
-                        <label>Reference</label>
-                        <input type="text" id="pay-ref" placeholder="PAY-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="pay-ref" placeholder="Bank transaction ref, etc.">
                     </div>
                     <div class="form-group">
                         <label>Description</label>
@@ -333,8 +333,8 @@
                         <input type="date" id="jnl-date">
                     </div>
                     <div class="form-group">
-                        <label>Reference</label>
-                        <input type="text" id="jnl-ref" placeholder="JNL-001">
+                        <label>External Reference <span style="font-weight:400;color:var(--secondary-color)">(optional)</span></label>
+                        <input type="text" id="jnl-ref" placeholder="Your ref, etc.">
                     </div>
                     <div class="form-group">
                         <label>Description</label>
@@ -361,6 +361,7 @@
                             <th>Date</th>
                             <th>Type</th>
                             <th>Reference</th>
+                        <th>Ext. Ref</th>
                             <th>Description</th>
                             <th>Amount</th>
                             <th>Status</th>
@@ -368,7 +369,7 @@
                         </tr>
                     </thead>
                     <tbody id="entriesTable">
-                        <tr><td colspan="7" style="text-align: center; color: var(--secondary-color);">Loading...</td></tr>
+                        <tr><td colspan="8" style="text-align: center; color: var(--secondary-color);">Loading...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -639,9 +640,8 @@
             }
             // Date (today)
             document.getElementById(`${formPrefix}-date`).value = new Date().toISOString().split('T')[0];
-            // Reference
-            const origRef = entry.referenceNumber || '';
-            document.getElementById(`${formPrefix}-ref`).value = origRef ? `${formPrefix === 'sales-return' ? 'CN' : 'DN'}-${origRef}` : '';
+            // External reference — pre-fill with original's internal ref for traceability
+            document.getElementById(`${formPrefix}-ref`).value = entry.referenceNumber ? `Re: ${entry.referenceNumber}` : '';
             // Description
             document.getElementById(`${formPrefix}-desc`).value = entry.description ? `Return: ${entry.description}` : '';
 
@@ -738,7 +738,7 @@
 
             const payload = {
                 entryDate: date,
-                referenceNumber: document.getElementById(`${formType}-ref`)?.value || null,
+                externalReference: document.getElementById(`${formType}-ref`)?.value || null,
                 description: document.getElementById(`${formType}-desc`)?.value || null,
                 ...entityPayload,
                 ...(linkedDaybookEntryId ? { linkedDaybookEntryId } : {}),
@@ -781,7 +781,7 @@
             UIUtils.showLoading();
             const response = await ApiService.createReceiptDaybookEntry(orgId, {
                 bankAccountId, creditAccountId, entryDate: date, amount,
-                referenceNumber: document.getElementById('rcpt-ref').value || null,
+                externalReference: document.getElementById('rcpt-ref').value || null,
                 description: document.getElementById('rcpt-desc').value || null,
             });
             UIUtils.hideLoading();
@@ -803,7 +803,7 @@
             UIUtils.showLoading();
             const response = await ApiService.createPaymentDaybookEntry(orgId, {
                 bankAccountId, debitAccountId, entryDate: date, amount,
-                referenceNumber: document.getElementById('pay-ref').value || null,
+                externalReference: document.getElementById('pay-ref').value || null,
                 description: document.getElementById('pay-desc').value || null,
             });
             UIUtils.hideLoading();
@@ -854,7 +854,7 @@
             UIUtils.showLoading();
             const response = await ApiService.createDaybookEntry(orgId, {
                 type: 'Journal', entryDate: date,
-                referenceNumber: document.getElementById('jnl-ref').value || null,
+                externalReference: document.getElementById('jnl-ref').value || null,
                 description: document.getElementById('jnl-desc').value || null,
                 lines
             });
@@ -978,7 +978,7 @@
             populateOriginalSelects();
             const tbody = document.getElementById('entriesTable');
             if (entries.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No entries yet. Use the buttons above to create one.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No entries yet. Use the buttons above to create one.</td></tr>';
                 return;
             }
             const typeLabels = {
@@ -1032,7 +1032,8 @@
                     <tr onclick="toggleJournalLines(this)" style="cursor:pointer;" title="Click to view journal entries">
                         <td>${UIUtils.formatDate(entry.entryDate)}</td>
                         <td>${typeLabel}</td>
-                        <td>${escHtml(entry.referenceNumber || '-')}</td>
+                        <td><strong>${escHtml(entry.referenceNumber || '-')}</strong></td>
+                        <td>${escHtml(entry.externalReference || '')}</td>
                         <td>${displayDesc}${subDesc}</td>
                         <td>${UIUtils.formatCurrency(totalDebit)}</td>
                         <td>${entry.isPosted ? '<span style="color:var(--success-color);">✓ Posted</span>' : '<span style="color:var(--warning-color);">⏳ Draft</span>'}</td>
@@ -1043,7 +1044,7 @@
                             </div>
                         </td>
                     </tr>
-                    <tr class="journal-detail" style="display:none;"><td colspan="7" style="padding:0;">${detailContent}</td></tr>`;
+                    <tr class="journal-detail" style="display:none;"><td colspan="8" style="padding:0;">${detailContent}</td></tr>`;
             }).join('');
         }
 

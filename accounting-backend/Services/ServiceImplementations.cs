@@ -423,12 +423,14 @@ public class DaybookService : IDaybookService
             }
         }
 
+        var internalRef = await NextInternalReferenceAsync(organisationId, request.Type);
         var daybookEntry = new DaybookEntry
         {
             Id = Guid.NewGuid(),
             OrganisationId = organisationId,
             Type = request.Type,
-            ReferenceNumber = request.ReferenceNumber,
+            ReferenceNumber = internalRef,
+            ExternalReference = request.ExternalReference,
             EntryDate = request.EntryDate,
             Description = request.Description,
             IsPosted = false,
@@ -659,7 +661,7 @@ public class DaybookService : IDaybookService
 
         decimal totalAmount = request.Lines.Sum(l => l.NetAmount + l.VatAmount);
 
-        var entry = BuildDaybookEntry(organisationId, "Sales", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        var entry = await BuildDaybookEntryAsync(organisationId, "Sales", request.ExternalReference, request.EntryDate, request.Description, customerId, null);
         _context.DaybookEntries.Add(entry);
 
         // DR Receivable (credit) or payment asset account (immediate) for the full invoice total
@@ -740,7 +742,7 @@ public class DaybookService : IDaybookService
 
         decimal totalAmount = request.Lines.Sum(l => l.NetAmount + l.VatAmount);
 
-        var entry = BuildDaybookEntry(organisationId, "SalesReturn", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        var entry = await BuildDaybookEntryAsync(organisationId, "SalesReturn", request.ExternalReference, request.EntryDate, request.Description, customerId, null);
         _context.DaybookEntries.Add(entry);
 
         // CR Receivable (reduce what customer owes) or CR asset account (immediate cash/bank refund)
@@ -824,7 +826,7 @@ public class DaybookService : IDaybookService
 
         decimal totalAmount = request.Lines.Sum(l => l.NetAmount + l.VatAmount);
 
-        var entry = BuildDaybookEntry(organisationId, "Purchase", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        var entry = await BuildDaybookEntryAsync(organisationId, "Purchase", request.ExternalReference, request.EntryDate, request.Description, null, supplierId);
         _context.DaybookEntries.Add(entry);
 
         // DR Expense (and VAT) per line
@@ -905,7 +907,7 @@ public class DaybookService : IDaybookService
 
         decimal totalAmount = request.Lines.Sum(l => l.NetAmount + l.VatAmount);
 
-        var entry = BuildDaybookEntry(organisationId, "PurchaseReturn", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        var entry = await BuildDaybookEntryAsync(organisationId, "PurchaseReturn", request.ExternalReference, request.EntryDate, request.Description, null, supplierId);
         _context.DaybookEntries.Add(entry);
 
         // DR Payable (reduce what we owe supplier) or DR asset account (immediate cash/bank refund received)
@@ -951,7 +953,7 @@ public class DaybookService : IDaybookService
                 throw new ResourceNotFoundException("Linked Daybook Entry", request.LinkedDaybookEntryId.Value.ToString());
         }
 
-        var entry = BuildDaybookEntry(organisationId, "Receipt", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        var entry = await BuildDaybookEntryAsync(organisationId, "Receipt", request.ExternalReference, request.EntryDate, request.Description, customerId, null);
         entry.LinkedDaybookEntryId = request.LinkedDaybookEntryId;
         _context.DaybookEntries.Add(entry);
 
@@ -991,7 +993,7 @@ public class DaybookService : IDaybookService
                 throw new ResourceNotFoundException("Linked Daybook Entry", request.LinkedDaybookEntryId.Value.ToString());
         }
 
-        var entry = BuildDaybookEntry(organisationId, "Payment", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        var entry = await BuildDaybookEntryAsync(organisationId, "Payment", request.ExternalReference, request.EntryDate, request.Description, null, supplierId);
         entry.LinkedDaybookEntryId = request.LinkedDaybookEntryId;
         _context.DaybookEntries.Add(entry);
 
@@ -1038,7 +1040,7 @@ public class DaybookService : IDaybookService
             (customerId, debitAccountId) = await ResolveCustomer(request.CustomerId, arAccountId);
         }
 
-        var entry = BuildDaybookEntry(organisationId, "Sales", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        var entry = await BuildDaybookEntryAsync(organisationId, "Sales", request.ExternalReference, request.EntryDate, request.Description, customerId, null);
         _context.DaybookEntries.Add(entry);
         AddJournalLine(entry.Id, debitAccountId, debit: total, narration: request.Description);
         foreach (var (accountId, desc, netAmount, vatAmount) in lines)
@@ -1084,7 +1086,7 @@ public class DaybookService : IDaybookService
             (customerId, creditAccountId) = await ResolveCustomer(request.CustomerId, arAccountId);
         }
 
-        var entry = BuildDaybookEntry(organisationId, "SalesReturn", request.ReferenceNumber, request.EntryDate, request.Description, customerId, null);
+        var entry = await BuildDaybookEntryAsync(organisationId, "SalesReturn", request.ExternalReference, request.EntryDate, request.Description, customerId, null);
         entry.LinkedDaybookEntryId = request.LinkedDaybookEntryId;
         _context.DaybookEntries.Add(entry);
         AddJournalLine(entry.Id, creditAccountId, credit: total, narration: request.Description);
@@ -1123,7 +1125,7 @@ public class DaybookService : IDaybookService
             (supplierId, creditAccountId) = await ResolveSupplier(request.SupplierId, apAccountId);
         }
 
-        var entry = BuildDaybookEntry(organisationId, "Purchase", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        var entry = await BuildDaybookEntryAsync(organisationId, "Purchase", request.ExternalReference, request.EntryDate, request.Description, null, supplierId);
         _context.DaybookEntries.Add(entry);
         foreach (var (accountId, desc, netAmount, vatAmount) in lines)
         {
@@ -1169,7 +1171,7 @@ public class DaybookService : IDaybookService
             (supplierId, debitAccountId) = await ResolveSupplier(request.SupplierId, apAccountId);
         }
 
-        var entry = BuildDaybookEntry(organisationId, "PurchaseReturn", request.ReferenceNumber, request.EntryDate, request.Description, null, supplierId);
+        var entry = await BuildDaybookEntryAsync(organisationId, "PurchaseReturn", request.ExternalReference, request.EntryDate, request.Description, null, supplierId);
         entry.LinkedDaybookEntryId = request.LinkedDaybookEntryId;
         _context.DaybookEntries.Add(entry);
         AddJournalLine(entry.Id, debitAccountId, debit: total, narration: request.Description);
@@ -1252,14 +1254,41 @@ public class DaybookService : IDaybookService
         return result;
     }
 
-    private DaybookEntry BuildDaybookEntry(Guid organisationId, string type, string? reference, DateTime entryDate, string? description, Guid? customerId, Guid? supplierId)
+    private static readonly Dictionary<string, string> _typePrefixes = new()
     {
+        ["Sales"]          = "SI",
+        ["SalesReturn"]    = "SR",
+        ["Purchase"]       = "PI",
+        ["PurchaseReturn"] = "PR",
+        ["Receipt"]        = "RC",
+        ["Payment"]        = "PY",
+        ["Journal"]        = "JN",
+    };
+
+    private async Task<string> NextInternalReferenceAsync(Guid organisationId, string entryType)
+    {
+        var prefix = _typePrefixes.GetValueOrDefault(entryType, "XX");
+        var seq = await _context.DaybookSequences
+            .FirstOrDefaultAsync(s => s.OrganisationId == organisationId && s.EntryType == entryType);
+        if (seq == null)
+        {
+            seq = new DaybookSequence { OrganisationId = organisationId, EntryType = entryType, LastNumber = 0 };
+            _context.DaybookSequences.Add(seq);
+        }
+        seq.LastNumber++;
+        return $"{prefix}-{seq.LastNumber:D4}";
+    }
+
+    private async Task<DaybookEntry> BuildDaybookEntryAsync(Guid organisationId, string type, string? externalReference, DateTime entryDate, string? description, Guid? customerId, Guid? supplierId)
+    {
+        var internalRef = await NextInternalReferenceAsync(organisationId, type);
         return new DaybookEntry
         {
             Id = Guid.NewGuid(),
             OrganisationId = organisationId,
             Type = type,
-            ReferenceNumber = reference,
+            ReferenceNumber = internalRef,
+            ExternalReference = externalReference,
             EntryDate = entryDate,
             Description = description,
             CustomerId = customerId,
@@ -1321,6 +1350,7 @@ public class DaybookService : IDaybookService
             Id = daybookEntry.Id,
             Type = daybookEntry.Type,
             ReferenceNumber = daybookEntry.ReferenceNumber,
+            ExternalReference = daybookEntry.ExternalReference,
             EntryDate = daybookEntry.EntryDate,
             Description = daybookEntry.Description,
             IsPosted = daybookEntry.IsPosted,

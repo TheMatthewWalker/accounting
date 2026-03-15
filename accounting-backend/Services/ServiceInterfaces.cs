@@ -142,7 +142,7 @@ public interface IDaybookService
 
 public class CreateSalesDaybookRequest
 {
-    public string? ReferenceNumber { get; set; }
+    public string? ExternalReference { get; set; }
     [Required]
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
@@ -174,7 +174,7 @@ public class SalesDaybookLine
 
 public class CreateSalesReturnDaybookRequest
 {
-    public string? ReferenceNumber { get; set; }
+    public string? ExternalReference { get; set; }
     [Required]
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
@@ -207,7 +207,7 @@ public class SalesReturnLine
 
 public class CreatePurchaseDaybookRequest
 {
-    public string? ReferenceNumber { get; set; }
+    public string? ExternalReference { get; set; }
     [Required]
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
@@ -239,7 +239,7 @@ public class PurchaseDaybookLine
 
 public class CreateReceiptDaybookRequest
 {
-    public string? ReferenceNumber { get; set; }
+    public string? ExternalReference { get; set; }
     [Required]
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
@@ -258,7 +258,7 @@ public class CreateReceiptDaybookRequest
 
 public class CreatePaymentDaybookRequest
 {
-    public string? ReferenceNumber { get; set; }
+    public string? ExternalReference { get; set; }
     [Required]
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
@@ -280,7 +280,7 @@ public class CreateDaybookRequest
     [Required]
     [RegularExpression("^(Sales|Purchase|Journal|Bank|Receipt|Payment)$")]
     public string Type { get; set; } = string.Empty;
-    public string? ReferenceNumber { get; set; }
+    public string? ExternalReference { get; set; }
     [Required]
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
@@ -306,7 +306,10 @@ public class DaybookResponse
 {
     public Guid Id { get; set; }
     public string Type { get; set; } = string.Empty;
+    /// <summary>Auto-generated internal reference (e.g. SI-0001)</summary>
     public string? ReferenceNumber { get; set; }
+    /// <summary>User-supplied external reference (e.g. supplier invoice number)</summary>
+    public string? ExternalReference { get; set; }
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
     public bool IsPosted { get; set; }
@@ -663,7 +666,7 @@ public class ProductServiceResponse
 
 public class SimpleInvoiceRequest
 {
-    public string? ReferenceNumber { get; set; }
+    public string? ExternalReference { get; set; }
     [Required]
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
