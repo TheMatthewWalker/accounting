@@ -1836,6 +1836,734 @@ public class ReportService : IReportService
             TotalEquity = totalEquity
         };
     }
+
+    // ── Pro Tier Reports ──────────────────────────────────────────────────────
+
+    public async Task<AgedDebtorsResponse> GetAgedDebtorsAsync(Guid organisationId, DateTime asOfDate)
+    {
+        _logger.LogInformation("Generating aged debtors for organisation {OrganisationId} as of {AsOfDate}", organisationId, asOfDate);
+
+        var org = await _context.Organisations.FindAsync(organisationId);
+        if (org == null || org.SubscriptionTier == "Free")
+            throw new ForbiddenException("Aged Debtors report requires a Pro or Enterprise subscription.");
+
+        var customers = await _context.Customers
+            .Where(c => c.OrganisationId == organisationId && c.IsActive && c.ControlAccountId != null)
+            .ToListAsync();
+
+        var response = new AgedDebtorsResponse { AsOfDate = asOfDate };
+
+        foreach (var customer in customers)
+        {
+            var salesEntries = await _context.DaybookEntries
+                .Where(de => de.OrganisationId == organisationId &&
+                             de.CustomerId == customer.Id &&
+                             de.Type == "Sales" &&
+                             de.IsPosted &&
+                             de.EntryDate <= asOfDate)
+                .ToListAsync();
+
+            if (!salesEntries.Any()) continue;
+
+            var customerLine = new AgedDebtorLine
+            {
+                CustomerId = customer.Id,
+                CustomerName = customer.Name
+            };
+
+            foreach (var invoice in salesEntries)
+            {
+                var invoiceDebit = await _context.JournalEntries
+                    .Where(je => je.DaybookEntryId == invoice.Id && je.GLAccountId == customer.ControlAccountId)
+                    .SumAsync(je => je.DebitAmount);
+
+                var linkedReceipts = await _context.DaybookEntries
+                    .Where(de => de.LinkedDaybookEntryId == invoice.Id && de.Type == "Receipt" && de.IsPosted && de.EntryDate <= asOfDate)
+                    .ToListAsync();
+
+                decimal totalSettled = 0;
+                foreach (var receipt in linkedReceipts)
+                {
+                    totalSettled += await _context.JournalEntries
+                        .Where(je => je.DaybookEntryId == receipt.Id && je.GLAccountId == customer.ControlAccountId)
+                        .SumAsync(je => je.CreditAmount);
+                }
+
+                decimal outstanding = invoiceDebit - totalSettled;
+                if (outstanding <= 0.01m) continue;
+
+                int ageDays = (int)(asOfDate - invoice.EntryDate).TotalDays;
+                if (ageDays <= 30) customerLine.Current += outstanding;
+                else if (ageDays <= 60) customerLine.Days30 += outstanding;
+                else if (ageDays <= 90) customerLine.Days60 += outstanding;
+                else customerLine.Over90 += outstanding;
+            }
+
+            customerLine.Total = customerLine.Current + customerLine.Days30 + customerLine.Days60 + customerLine.Over90;
+            if (customerLine.Total > 0.01m) response.Customers.Add(customerLine);
+        }
+
+        response.Customers = response.Customers.OrderByDescending(c => c.Total).ToList();
+        response.TotalCurrent = response.Customers.Sum(c => c.Current);
+        response.Total30Days = response.Customers.Sum(c => c.Days30);
+        response.Total60Days = response.Customers.Sum(c => c.Days60);
+        response.TotalOver90Days = response.Customers.Sum(c => c.Over90);
+        response.GrandTotal = response.Customers.Sum(c => c.Total);
+
+        return response;
+    }
+
+    public async Task<AgedCreditorsResponse> GetAgedCreditorsAsync(Guid organisationId, DateTime asOfDate)
+    {
+        _logger.LogInformation("Generating aged creditors for organisation {OrganisationId} as of {AsOfDate}", organisationId, asOfDate);
+
+        var org = await _context.Organisations.FindAsync(organisationId);
+        if (org == null || org.SubscriptionTier == "Free")
+            throw new ForbiddenException("Aged Creditors report requires a Pro or Enterprise subscription.");
+
+        var suppliers = await _context.Suppliers
+            .Where(s => s.OrganisationId == organisationId && s.IsActive && s.ControlAccountId != null)
+            .ToListAsync();
+
+        var response = new AgedCreditorsResponse { AsOfDate = asOfDate };
+
+        foreach (var supplier in suppliers)
+        {
+            var purchaseEntries = await _context.DaybookEntries
+                .Where(de => de.OrganisationId == organisationId &&
+                             de.SupplierId == supplier.Id &&
+                             de.Type == "Purchase" &&
+                             de.IsPosted &&
+                             de.EntryDate <= asOfDate)
+                .ToListAsync();
+
+            if (!purchaseEntries.Any()) continue;
+
+            var supplierLine = new AgedCreditorLine
+            {
+                SupplierId = supplier.Id,
+                SupplierName = supplier.Name
+            };
+
+            foreach (var bill in purchaseEntries)
+            {
+                var billCredit = await _context.JournalEntries
+                    .Where(je => je.DaybookEntryId == bill.Id && je.GLAccountId == supplier.ControlAccountId)
+                    .SumAsync(je => je.CreditAmount);
+
+                var linkedPayments = await _context.DaybookEntries
+                    .Where(de => de.LinkedDaybookEntryId == bill.Id && de.Type == "Payment" && de.IsPosted && de.EntryDate <= asOfDate)
+                    .ToListAsync();
+
+                decimal totalPaid = 0;
+                foreach (var payment in linkedPayments)
+                {
+                    totalPaid += await _context.JournalEntries
+                        .Where(je => je.DaybookEntryId == payment.Id && je.GLAccountId == supplier.ControlAccountId)
+                        .SumAsync(je => je.DebitAmount);
+                }
+
+                decimal outstanding = billCredit - totalPaid;
+                if (outstanding <= 0.01m) continue;
+
+                int ageDays = (int)(asOfDate - bill.EntryDate).TotalDays;
+                if (ageDays <= 30) supplierLine.Current += outstanding;
+                else if (ageDays <= 60) supplierLine.Days30 += outstanding;
+                else if (ageDays <= 90) supplierLine.Days60 += outstanding;
+                else supplierLine.Over90 += outstanding;
+            }
+
+            supplierLine.Total = supplierLine.Current + supplierLine.Days30 + supplierLine.Days60 + supplierLine.Over90;
+            if (supplierLine.Total > 0.01m) response.Suppliers.Add(supplierLine);
+        }
+
+        response.Suppliers = response.Suppliers.OrderByDescending(s => s.Total).ToList();
+        response.TotalCurrent = response.Suppliers.Sum(s => s.Current);
+        response.Total30Days = response.Suppliers.Sum(s => s.Days30);
+        response.Total60Days = response.Suppliers.Sum(s => s.Days60);
+        response.TotalOver90Days = response.Suppliers.Sum(s => s.Over90);
+        response.GrandTotal = response.Suppliers.Sum(s => s.Total);
+
+        return response;
+    }
+
+    public async Task<VatReturnResponse> GetVatReturnAsync(Guid organisationId, DateTime fromDate, DateTime toDate)
+    {
+        _logger.LogInformation("Generating VAT return for organisation {OrganisationId} from {FromDate} to {ToDate}", organisationId, fromDate, toDate);
+
+        var org = await _context.Organisations.FindAsync(organisationId);
+        if (org == null || org.SubscriptionTier == "Free")
+            throw new ForbiddenException("VAT Return report requires a Pro or Enterprise subscription.");
+
+        if (toDate < fromDate)
+            throw new ValidationException("toDate must be greater than or equal to fromDate.");
+
+        var vatAccounts = await _context.GLAccounts
+            .Where(a => a.OrganisationId == organisationId && a.IsActive &&
+                        a.SubType != null && (a.SubType.Contains("VAT") || a.SubType.Contains("Tax")))
+            .ToListAsync();
+
+        if (org.DefaultVatAccountId != null && !vatAccounts.Any(a => a.Id == org.DefaultVatAccountId))
+        {
+            var defaultVat = await _context.GLAccounts.FindAsync(org.DefaultVatAccountId);
+            if (defaultVat != null) vatAccounts.Add(defaultVat);
+        }
+
+        var response = new VatReturnResponse { FromDate = fromDate, ToDate = toDate };
+
+        foreach (var account in vatAccounts)
+        {
+            var outputVat = await _context.JournalEntries
+                .Where(je => je.GLAccountId == account.Id &&
+                             je.DaybookEntry!.IsPosted &&
+                             je.DaybookEntry!.EntryDate >= fromDate &&
+                             je.DaybookEntry!.EntryDate <= toDate &&
+                             (je.DaybookEntry!.Type == "Sales" || je.DaybookEntry!.Type == "SalesReturn"))
+                .SumAsync(je => je.CreditAmount - je.DebitAmount);
+
+            var inputVat = await _context.JournalEntries
+                .Where(je => je.GLAccountId == account.Id &&
+                             je.DaybookEntry!.IsPosted &&
+                             je.DaybookEntry!.EntryDate >= fromDate &&
+                             je.DaybookEntry!.EntryDate <= toDate &&
+                             (je.DaybookEntry!.Type == "Purchase" || je.DaybookEntry!.Type == "PurchaseReturn"))
+                .SumAsync(je => je.DebitAmount - je.CreditAmount);
+
+            if (Math.Abs(outputVat) > 0.01m || Math.Abs(inputVat) > 0.01m)
+            {
+                response.Lines.Add(new VatReturnLine
+                {
+                    AccountCode = account.Code,
+                    AccountName = account.Name,
+                    OutputVat = outputVat,
+                    InputVat = inputVat
+                });
+            }
+        }
+
+        response.OutputVat = response.Lines.Sum(l => l.OutputVat);
+        response.InputVat = response.Lines.Sum(l => l.InputVat);
+        response.NetVatPayable = response.OutputVat - response.InputVat;
+
+        return response;
+    }
+
+    public async Task<IncomeByCustomerResponse> GetIncomeByCustomerAsync(Guid organisationId, DateTime fromDate, DateTime toDate)
+    {
+        _logger.LogInformation("Generating income by customer for organisation {OrganisationId} from {FromDate} to {ToDate}", organisationId, fromDate, toDate);
+
+        var org = await _context.Organisations.FindAsync(organisationId);
+        if (org == null || org.SubscriptionTier == "Free")
+            throw new ForbiddenException("Income by Customer report requires a Pro or Enterprise subscription.");
+
+        if (toDate < fromDate)
+            throw new ValidationException("toDate must be greater than or equal to fromDate.");
+
+        var customers = await _context.Customers
+            .Where(c => c.OrganisationId == organisationId && c.IsActive && c.ControlAccountId != null)
+            .ToListAsync();
+
+        var response = new IncomeByCustomerResponse { FromDate = fromDate, ToDate = toDate };
+
+        foreach (var customer in customers)
+        {
+            var salesEntries = await _context.DaybookEntries
+                .Where(de => de.OrganisationId == organisationId &&
+                             de.CustomerId == customer.Id &&
+                             (de.Type == "Sales" || de.Type == "SalesReturn") &&
+                             de.IsPosted &&
+                             de.EntryDate >= fromDate &&
+                             de.EntryDate <= toDate)
+                .ToListAsync();
+
+            if (!salesEntries.Any()) continue;
+
+            decimal totalInvoiced = 0;
+            foreach (var entry in salesEntries)
+            {
+                var net = await _context.JournalEntries
+                    .Where(je => je.DaybookEntryId == entry.Id && je.GLAccountId == customer.ControlAccountId)
+                    .SumAsync(je => je.DebitAmount - je.CreditAmount);
+                totalInvoiced += net;
+            }
+
+            var receiptEntries = await _context.DaybookEntries
+                .Where(de => de.OrganisationId == organisationId &&
+                             de.CustomerId == customer.Id &&
+                             de.Type == "Receipt" &&
+                             de.IsPosted &&
+                             de.EntryDate >= fromDate &&
+                             de.EntryDate <= toDate)
+                .ToListAsync();
+
+            decimal totalReceived = 0;
+            foreach (var receipt in receiptEntries)
+            {
+                var credit = await _context.JournalEntries
+                    .Where(je => je.DaybookEntryId == receipt.Id && je.GLAccountId == customer.ControlAccountId)
+                    .SumAsync(je => je.CreditAmount - je.DebitAmount);
+                totalReceived += credit;
+            }
+
+            response.Lines.Add(new IncomeByCustomerLine
+            {
+                CustomerId = customer.Id,
+                CustomerName = customer.Name,
+                InvoiceCount = salesEntries.Count,
+                TotalInvoiced = totalInvoiced,
+                TotalReceived = totalReceived,
+                Outstanding = totalInvoiced - totalReceived
+            });
+        }
+
+        response.Lines = response.Lines.OrderByDescending(l => l.TotalInvoiced).ToList();
+        response.Total = response.Lines.Sum(l => l.TotalInvoiced);
+
+        return response;
+    }
+
+    public async Task<SpendBySupplierResponse> GetSpendBySupplierAsync(Guid organisationId, DateTime fromDate, DateTime toDate)
+    {
+        _logger.LogInformation("Generating spend by supplier for organisation {OrganisationId} from {FromDate} to {ToDate}", organisationId, fromDate, toDate);
+
+        var org = await _context.Organisations.FindAsync(organisationId);
+        if (org == null || org.SubscriptionTier == "Free")
+            throw new ForbiddenException("Spend by Supplier report requires a Pro or Enterprise subscription.");
+
+        if (toDate < fromDate)
+            throw new ValidationException("toDate must be greater than or equal to fromDate.");
+
+        var suppliers = await _context.Suppliers
+            .Where(s => s.OrganisationId == organisationId && s.IsActive && s.ControlAccountId != null)
+            .ToListAsync();
+
+        var response = new SpendBySupplierResponse { FromDate = fromDate, ToDate = toDate };
+
+        foreach (var supplier in suppliers)
+        {
+            var purchaseEntries = await _context.DaybookEntries
+                .Where(de => de.OrganisationId == organisationId &&
+                             de.SupplierId == supplier.Id &&
+                             (de.Type == "Purchase" || de.Type == "PurchaseReturn") &&
+                             de.IsPosted &&
+                             de.EntryDate >= fromDate &&
+                             de.EntryDate <= toDate)
+                .ToListAsync();
+
+            if (!purchaseEntries.Any()) continue;
+
+            decimal totalInvoiced = 0;
+            foreach (var entry in purchaseEntries)
+            {
+                var net = await _context.JournalEntries
+                    .Where(je => je.DaybookEntryId == entry.Id && je.GLAccountId == supplier.ControlAccountId)
+                    .SumAsync(je => je.CreditAmount - je.DebitAmount);
+                totalInvoiced += net;
+            }
+
+            var paymentEntries = await _context.DaybookEntries
+                .Where(de => de.OrganisationId == organisationId &&
+                             de.SupplierId == supplier.Id &&
+                             de.Type == "Payment" &&
+                             de.IsPosted &&
+                             de.EntryDate >= fromDate &&
+                             de.EntryDate <= toDate)
+                .ToListAsync();
+
+            decimal totalPaid = 0;
+            foreach (var payment in paymentEntries)
+            {
+                var debit = await _context.JournalEntries
+                    .Where(je => je.DaybookEntryId == payment.Id && je.GLAccountId == supplier.ControlAccountId)
+                    .SumAsync(je => je.DebitAmount - je.CreditAmount);
+                totalPaid += debit;
+            }
+
+            response.Lines.Add(new SpendBySupplierLine
+            {
+                SupplierId = supplier.Id,
+                SupplierName = supplier.Name,
+                InvoiceCount = purchaseEntries.Count,
+                TotalInvoiced = totalInvoiced,
+                TotalPaid = totalPaid,
+                Outstanding = totalInvoiced - totalPaid
+            });
+        }
+
+        response.Lines = response.Lines.OrderByDescending(l => l.TotalInvoiced).ToList();
+        response.Total = response.Lines.Sum(l => l.TotalInvoiced);
+
+        return response;
+    }
+
+    // ── Enterprise Tier Reports ───────────────────────────────────────────────
+
+    public async Task<ComparativeProfitAndLossResponse> GetComparativeProfitAndLossAsync(
+        Guid organisationId, DateTime period1From, DateTime period1To, DateTime period2From, DateTime period2To)
+    {
+        _logger.LogInformation("Generating comparative P&L for organisation {OrganisationId}", organisationId);
+
+        var org = await _context.Organisations.FindAsync(organisationId);
+        if (org == null || org.SubscriptionTier != "Enterprise")
+            throw new ForbiddenException("Comparative P&L report requires an Enterprise subscription.");
+
+        var p1 = await GetProfitAndLossAsync(organisationId, period1From, period1To);
+        var p2 = await GetProfitAndLossAsync(organisationId, period2From, period2To);
+
+        return new ComparativeProfitAndLossResponse
+        {
+            Period1From = period1From,
+            Period1To = period1To,
+            Period2From = period2From,
+            Period2To = period2To,
+            Revenue = MergeComparativeLines(p1.Revenue, p2.Revenue),
+            CostOfSales = MergeComparativeLines(p1.CostOfSales, p2.CostOfSales),
+            OperatingExpenses = MergeComparativeLines(p1.OperatingExpenses, p2.OperatingExpenses),
+            FinanceCosts = MergeComparativeLines(p1.FinanceCosts, p2.FinanceCosts),
+            GrossProfit1 = p1.GrossProfit,
+            GrossProfit2 = p2.GrossProfit,
+            NetProfit1 = p1.NetProfit,
+            NetProfit2 = p2.NetProfit
+        };
+    }
+
+    private static List<ComparativePnLLine> MergeComparativeLines(List<PnLLineResponse> p1Lines, List<PnLLineResponse> p2Lines)
+    {
+        var allCodes = p1Lines.Select(l => l.Code).Concat(p2Lines.Select(l => l.Code)).Distinct();
+        return allCodes.Select(code =>
+        {
+            var l1 = p1Lines.FirstOrDefault(l => l.Code == code);
+            var l2 = p2Lines.FirstOrDefault(l => l.Code == code);
+            decimal period1 = l1?.Amount ?? 0;
+            decimal period2 = l2?.Amount ?? 0;
+            return new ComparativePnLLine
+            {
+                Code = code,
+                Name = (l1 ?? l2)!.Name,
+                SubType = (l1 ?? l2)!.SubType,
+                Period1 = period1,
+                Period2 = period2,
+                Variance = period1 - period2
+            };
+        }).OrderBy(l => l.Code).ToList();
+    }
+
+    public async Task<CashFlowStatementResponse> GetCashFlowStatementAsync(Guid organisationId, DateTime fromDate, DateTime toDate)
+    {
+        _logger.LogInformation("Generating cash flow statement for organisation {OrganisationId} from {FromDate} to {ToDate}", organisationId, fromDate, toDate);
+
+        var org = await _context.Organisations.FindAsync(organisationId);
+        if (org == null || org.SubscriptionTier != "Enterprise")
+            throw new ForbiddenException("Cash Flow Statement requires an Enterprise subscription.");
+
+        if (toDate < fromDate)
+            throw new ValidationException("toDate must be greater than or equal to fromDate.");
+
+        // Identify bank/cash accounts
+        var cashAccounts = await _context.GLAccounts
+            .Where(a => a.OrganisationId == organisationId && a.IsActive && a.Type == "Asset" &&
+                        a.SubType != null && (a.SubType.Contains("Bank") || a.SubType.Contains("Cash")))
+            .ToListAsync();
+
+        var response = new CashFlowStatementResponse { FromDate = fromDate, ToDate = toDate };
+
+        // Opening cash: sum of opening balances + all movements before fromDate
+        foreach (var cashAccount in cashAccounts)
+        {
+            decimal openingMovement = await _context.JournalEntries
+                .Where(je => je.GLAccountId == cashAccount.Id &&
+                             je.DaybookEntry!.IsPosted &&
+                             je.DaybookEntry!.EntryDate < fromDate)
+                .SumAsync(je => je.DebitAmount - je.CreditAmount);
+            response.OpeningCash += cashAccount.OpeningBalance + openingMovement;
+        }
+
+        // Categorise cash movements in the period
+        var periodEntries = await _context.DaybookEntries
+            .Where(de => de.OrganisationId == organisationId &&
+                         de.IsPosted &&
+                         de.EntryDate >= fromDate &&
+                         de.EntryDate <= toDate)
+            .ToListAsync();
+
+        decimal cashFromCustomers = 0, cashToSuppliers = 0, otherOperating = 0;
+        decimal investing = 0, financing = 0;
+
+        var fixedAssetAccountIds = (await _context.GLAccounts
+            .Where(a => a.OrganisationId == organisationId && a.IsActive && a.Type == "Asset" &&
+                        a.SubType != null && a.SubType.Contains("Non"))
+            .Select(a => a.Id).ToListAsync()).ToHashSet();
+
+        var equityAccountIds = (await _context.GLAccounts
+            .Where(a => a.OrganisationId == organisationId && a.IsActive && a.Type == "Equity")
+            .Select(a => a.Id).ToListAsync()).ToHashSet();
+
+        var cashAccountIds = cashAccounts.Select(a => a.Id).ToHashSet();
+
+        foreach (var entry in periodEntries)
+        {
+            var lines = await _context.JournalEntries
+                .Where(je => je.DaybookEntryId == entry.Id && cashAccountIds.Contains(je.GLAccountId))
+                .ToListAsync();
+
+            decimal cashNet = lines.Sum(je => je.DebitAmount - je.CreditAmount);
+            if (Math.Abs(cashNet) <= 0.01m) continue;
+
+            bool hasFixedAsset = await _context.JournalEntries
+                .AnyAsync(je => je.DaybookEntryId == entry.Id && fixedAssetAccountIds.Contains(je.GLAccountId));
+
+            bool hasEquity = await _context.JournalEntries
+                .AnyAsync(je => je.DaybookEntryId == entry.Id && equityAccountIds.Contains(je.GLAccountId));
+
+            if (hasFixedAsset)
+                investing += cashNet;
+            else if (hasEquity)
+                financing += cashNet;
+            else if (entry.Type == "Receipt")
+                cashFromCustomers += cashNet;
+            else if (entry.Type == "Payment")
+                cashToSuppliers += cashNet;
+            else
+                otherOperating += cashNet;
+        }
+
+        if (Math.Abs(cashFromCustomers) > 0.01m)
+            response.OperatingActivities.Add(new CashFlowLine { Description = "Cash received from customers", Amount = cashFromCustomers });
+        if (Math.Abs(cashToSuppliers) > 0.01m)
+            response.OperatingActivities.Add(new CashFlowLine { Description = "Cash paid to suppliers", Amount = cashToSuppliers });
+        if (Math.Abs(otherOperating) > 0.01m)
+            response.OperatingActivities.Add(new CashFlowLine { Description = "Other operating cash flows", Amount = otherOperating });
+        if (Math.Abs(investing) > 0.01m)
+            response.InvestingActivities.Add(new CashFlowLine { Description = "Net investing activities", Amount = investing });
+        if (Math.Abs(financing) > 0.01m)
+            response.FinancingActivities.Add(new CashFlowLine { Description = "Net financing activities", Amount = financing });
+
+        response.NetOperatingCashFlow = response.OperatingActivities.Sum(l => l.Amount);
+        response.NetInvestingCashFlow = response.InvestingActivities.Sum(l => l.Amount);
+        response.NetFinancingCashFlow = response.FinancingActivities.Sum(l => l.Amount);
+        response.NetCashFlow = response.NetOperatingCashFlow + response.NetInvestingCashFlow + response.NetFinancingCashFlow;
+        response.ClosingCash = response.OpeningCash + response.NetCashFlow;
+
+        return response;
+    }
+
+    public async Task<AccountActivitySummaryResponse> GetAccountActivitySummaryAsync(Guid organisationId, DateTime fromDate, DateTime toDate)
+    {
+        _logger.LogInformation("Generating account activity summary for organisation {OrganisationId} from {FromDate} to {ToDate}", organisationId, fromDate, toDate);
+
+        var org = await _context.Organisations.FindAsync(organisationId);
+        if (org == null || org.SubscriptionTier != "Enterprise")
+            throw new ForbiddenException("Account Activity Summary requires an Enterprise subscription.");
+
+        if (toDate < fromDate)
+            throw new ValidationException("toDate must be greater than or equal to fromDate.");
+
+        var accounts = await _context.GLAccounts
+            .Where(a => a.OrganisationId == organisationId && a.IsActive)
+            .OrderBy(a => a.Code)
+            .ToListAsync();
+
+        var response = new AccountActivitySummaryResponse { FromDate = fromDate, ToDate = toDate };
+
+        // Build list of year-month pairs spanning the range
+        var months = new List<(int Year, int Month)>();
+        var cursor = new DateTime(fromDate.Year, fromDate.Month, 1);
+        var end = new DateTime(toDate.Year, toDate.Month, 1);
+        while (cursor <= end)
+        {
+            months.Add((cursor.Year, cursor.Month));
+            cursor = cursor.AddMonths(1);
+        }
+
+        foreach (var account in accounts)
+        {
+            var allEntries = await _context.JournalEntries
+                .AsNoTracking()
+                .Where(je => je.GLAccountId == account.Id &&
+                             je.DaybookEntry!.IsPosted &&
+                             je.DaybookEntry!.EntryDate >= fromDate &&
+                             je.DaybookEntry!.EntryDate <= toDate)
+                .Select(je => new { je.DebitAmount, je.CreditAmount, je.DaybookEntry!.EntryDate })
+                .ToListAsync();
+
+            if (!allEntries.Any()) continue;
+
+            var accountLine = new AccountActivityLine
+            {
+                Code = account.Code,
+                Name = account.Name,
+                Type = account.Type,
+                TotalDebits = allEntries.Sum(e => e.DebitAmount),
+                TotalCredits = allEntries.Sum(e => e.CreditAmount)
+            };
+            accountLine.NetMovement = accountLine.TotalDebits - accountLine.TotalCredits;
+
+            foreach (var (year, month) in months)
+            {
+                var monthEntries = allEntries.Where(e => e.EntryDate.Year == year && e.EntryDate.Month == month).ToList();
+                decimal debits = monthEntries.Sum(e => e.DebitAmount);
+                decimal credits = monthEntries.Sum(e => e.CreditAmount);
+                accountLine.Months.Add(new MonthlyActivityLine
+                {
+                    Year = year,
+                    Month = month,
+                    MonthName = new DateTime(year, month, 1).ToString("MMM yyyy"),
+                    Debits = debits,
+                    Credits = credits,
+                    Net = debits - credits
+                });
+            }
+
+            response.Accounts.Add(accountLine);
+        }
+
+        return response;
+    }
+
+    public async Task<RevenueBreakdownResponse> GetRevenueBreakdownAsync(Guid organisationId, DateTime fromDate, DateTime toDate)
+    {
+        _logger.LogInformation("Generating revenue breakdown for organisation {OrganisationId} from {FromDate} to {ToDate}", organisationId, fromDate, toDate);
+
+        var org = await _context.Organisations.FindAsync(organisationId);
+        if (org == null || org.SubscriptionTier != "Enterprise")
+            throw new ForbiddenException("Revenue Breakdown report requires an Enterprise subscription.");
+
+        if (toDate < fromDate)
+            throw new ValidationException("toDate must be greater than or equal to fromDate.");
+
+        var revenueAccounts = await _context.GLAccounts
+            .Where(a => a.OrganisationId == organisationId && a.IsActive && a.Type == "Revenue")
+            .OrderBy(a => a.Code)
+            .ToListAsync();
+
+        var response = new RevenueBreakdownResponse { FromDate = fromDate, ToDate = toDate };
+
+        foreach (var account in revenueAccounts)
+        {
+            var salesLines = await _context.JournalEntries
+                .AsNoTracking()
+                .Where(je => je.GLAccountId == account.Id &&
+                             je.DaybookEntry!.IsPosted &&
+                             je.DaybookEntry!.EntryDate >= fromDate &&
+                             je.DaybookEntry!.EntryDate <= toDate &&
+                             (je.DaybookEntry!.Type == "Sales" || je.DaybookEntry!.Type == "SalesReturn"))
+                .Select(je => new { je.CreditAmount, je.DebitAmount, je.DaybookEntry!.Type, je.DaybookEntryId })
+                .ToListAsync();
+
+            var otherLines = await _context.JournalEntries
+                .AsNoTracking()
+                .Where(je => je.GLAccountId == account.Id &&
+                             je.DaybookEntry!.IsPosted &&
+                             je.DaybookEntry!.EntryDate >= fromDate &&
+                             je.DaybookEntry!.EntryDate <= toDate &&
+                             je.DaybookEntry!.Type != "Sales" &&
+                             je.DaybookEntry!.Type != "SalesReturn")
+                .Select(je => new { je.CreditAmount, je.DebitAmount, je.DaybookEntry!.Type, je.DaybookEntryId })
+                .ToListAsync();
+
+            var allLines = salesLines.Concat(otherLines).ToList();
+            if (!allLines.Any()) continue;
+
+            decimal salesAmount = salesLines
+                .Where(l => l.Type == "Sales")
+                .Sum(l => l.CreditAmount - l.DebitAmount);
+            decimal returnsAmount = salesLines
+                .Where(l => l.Type == "SalesReturn")
+                .Sum(l => l.DebitAmount - l.CreditAmount);
+            decimal otherAmount = otherLines.Sum(l => l.CreditAmount - l.DebitAmount);
+            decimal netAmount = salesAmount - returnsAmount + otherAmount;
+
+            if (Math.Abs(netAmount) <= 0.01m && salesAmount == 0) continue;
+
+            int txCount = allLines.Select(l => l.DaybookEntryId).Distinct().Count();
+
+            response.Lines.Add(new RevenueBreakdownLine
+            {
+                Code = account.Code,
+                Name = account.Name,
+                SubType = account.SubType ?? "",
+                TransactionCount = txCount,
+                SalesAmount = salesAmount,
+                ReturnsAmount = returnsAmount,
+                NetAmount = netAmount
+            });
+        }
+
+        response.Lines = response.Lines.OrderByDescending(l => l.NetAmount).ToList();
+        response.TotalRevenue = response.Lines.Sum(l => l.NetAmount);
+
+        return response;
+    }
+
+    public async Task<DaybookAuditResponse> GetDaybookAuditAsync(Guid organisationId, DateTime fromDate, DateTime toDate)
+    {
+        _logger.LogInformation("Generating daybook audit for organisation {OrganisationId} from {FromDate} to {ToDate}", organisationId, fromDate, toDate);
+
+        var org = await _context.Organisations.FindAsync(organisationId);
+        if (org == null || org.SubscriptionTier != "Enterprise")
+            throw new ForbiddenException("Daybook Activity Audit requires an Enterprise subscription.");
+
+        if (toDate < fromDate)
+            throw new ValidationException("toDate must be greater than or equal to fromDate.");
+
+        var entries = await _context.DaybookEntries
+            .AsNoTracking()
+            .Where(de => de.OrganisationId == organisationId &&
+                         de.EntryDate >= fromDate &&
+                         de.EntryDate <= toDate)
+            .OrderBy(de => de.EntryDate)
+            .ThenBy(de => de.CreatedAt)
+            .ToListAsync();
+
+        var response = new DaybookAuditResponse
+        {
+            FromDate = fromDate,
+            ToDate = toDate,
+            TotalEntries = entries.Count,
+            PostedEntries = entries.Count(e => e.IsPosted),
+            DraftEntries = entries.Count(e => !e.IsPosted)
+        };
+
+        foreach (var entry in entries)
+        {
+            string customerName = string.Empty;
+            if (entry.CustomerId.HasValue)
+            {
+                var customer = await _context.Customers.FindAsync(entry.CustomerId.Value);
+                customerName = customer?.Name ?? string.Empty;
+            }
+
+            string supplierName = string.Empty;
+            if (entry.SupplierId.HasValue)
+            {
+                var supplier = await _context.Suppliers.FindAsync(entry.SupplierId.Value);
+                supplierName = supplier?.Name ?? string.Empty;
+            }
+
+            var journalLines = await _context.JournalEntries
+                .Where(je => je.DaybookEntryId == entry.Id)
+                .ToListAsync();
+
+            response.Entries.Add(new DaybookAuditLine
+            {
+                EntryId = entry.Id,
+                Type = entry.Type,
+                ReferenceNumber = entry.ReferenceNumber ?? string.Empty,
+                ExternalReference = entry.ExternalReference ?? string.Empty,
+                EntryDate = entry.EntryDate,
+                CreatedAt = entry.CreatedAt,
+                Description = entry.Description ?? string.Empty,
+                IsPosted = entry.IsPosted,
+                CustomerName = customerName,
+                SupplierName = supplierName,
+                TotalDebits = journalLines.Sum(je => je.DebitAmount),
+                TotalCredits = journalLines.Sum(je => je.CreditAmount),
+                LineCount = journalLines.Count
+            });
+        }
+
+        return response;
+    }
 }
 
 public class CustomerSupplierService : ICustomerSupplierService

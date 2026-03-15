@@ -340,6 +340,20 @@ public interface IReportService
     Task<GeneralLedgerResponse> GetGeneralLedgerAsync(Guid organisationId, DateTime fromDate, DateTime toDate);
     Task<ProfitAndLossResponse> GetProfitAndLossAsync(Guid organisationId, DateTime fromDate, DateTime toDate);
     Task<BalanceSheetResponse> GetBalanceSheetAsync(Guid organisationId, DateTime asOfDate);
+
+    // Pro tier reports
+    Task<AgedDebtorsResponse> GetAgedDebtorsAsync(Guid organisationId, DateTime asOfDate);
+    Task<AgedCreditorsResponse> GetAgedCreditorsAsync(Guid organisationId, DateTime asOfDate);
+    Task<VatReturnResponse> GetVatReturnAsync(Guid organisationId, DateTime fromDate, DateTime toDate);
+    Task<IncomeByCustomerResponse> GetIncomeByCustomerAsync(Guid organisationId, DateTime fromDate, DateTime toDate);
+    Task<SpendBySupplierResponse> GetSpendBySupplierAsync(Guid organisationId, DateTime fromDate, DateTime toDate);
+
+    // Enterprise tier reports
+    Task<ComparativeProfitAndLossResponse> GetComparativeProfitAndLossAsync(Guid organisationId, DateTime period1From, DateTime period1To, DateTime period2From, DateTime period2To);
+    Task<CashFlowStatementResponse> GetCashFlowStatementAsync(Guid organisationId, DateTime fromDate, DateTime toDate);
+    Task<AccountActivitySummaryResponse> GetAccountActivitySummaryAsync(Guid organisationId, DateTime fromDate, DateTime toDate);
+    Task<RevenueBreakdownResponse> GetRevenueBreakdownAsync(Guid organisationId, DateTime fromDate, DateTime toDate);
+    Task<DaybookAuditResponse> GetDaybookAuditAsync(Guid organisationId, DateTime fromDate, DateTime toDate);
 }
 
 public class TrialBalanceResponse
@@ -693,4 +707,227 @@ public class SimpleInvoiceLine
     [Required]
     [RegularExpression("^(standard|reduced|zero|exempt)$")]
     public string VatTreatment { get; set; } = "standard";
+}
+
+// ── Pro Tier Report DTOs ──────────────────────────────────────────────────────
+
+public class AgedDebtorsResponse
+{
+    public DateTime AsOfDate { get; set; }
+    public List<AgedDebtorLine> Customers { get; set; } = new();
+    public decimal TotalCurrent { get; set; }
+    public decimal Total30Days { get; set; }
+    public decimal Total60Days { get; set; }
+    public decimal TotalOver90Days { get; set; }
+    public decimal GrandTotal { get; set; }
+}
+
+public class AgedDebtorLine
+{
+    public Guid CustomerId { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public decimal Current { get; set; }     // 0–30 days
+    public decimal Days30 { get; set; }      // 31–60 days
+    public decimal Days60 { get; set; }      // 61–90 days
+    public decimal Over90 { get; set; }      // 91+ days
+    public decimal Total { get; set; }
+}
+
+public class AgedCreditorsResponse
+{
+    public DateTime AsOfDate { get; set; }
+    public List<AgedCreditorLine> Suppliers { get; set; } = new();
+    public decimal TotalCurrent { get; set; }
+    public decimal Total30Days { get; set; }
+    public decimal Total60Days { get; set; }
+    public decimal TotalOver90Days { get; set; }
+    public decimal GrandTotal { get; set; }
+}
+
+public class AgedCreditorLine
+{
+    public Guid SupplierId { get; set; }
+    public string SupplierName { get; set; } = string.Empty;
+    public decimal Current { get; set; }
+    public decimal Days30 { get; set; }
+    public decimal Days60 { get; set; }
+    public decimal Over90 { get; set; }
+    public decimal Total { get; set; }
+}
+
+public class VatReturnResponse
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public decimal OutputVat { get; set; }
+    public decimal InputVat { get; set; }
+    public decimal NetVatPayable { get; set; }
+    public List<VatReturnLine> Lines { get; set; } = new();
+}
+
+public class VatReturnLine
+{
+    public string AccountCode { get; set; } = string.Empty;
+    public string AccountName { get; set; } = string.Empty;
+    public decimal OutputVat { get; set; }
+    public decimal InputVat { get; set; }
+}
+
+public class IncomeByCustomerResponse
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public List<IncomeByCustomerLine> Lines { get; set; } = new();
+    public decimal Total { get; set; }
+}
+
+public class IncomeByCustomerLine
+{
+    public Guid CustomerId { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public int InvoiceCount { get; set; }
+    public decimal TotalInvoiced { get; set; }
+    public decimal TotalReceived { get; set; }
+    public decimal Outstanding { get; set; }
+}
+
+public class SpendBySupplierResponse
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public List<SpendBySupplierLine> Lines { get; set; } = new();
+    public decimal Total { get; set; }
+}
+
+public class SpendBySupplierLine
+{
+    public Guid SupplierId { get; set; }
+    public string SupplierName { get; set; } = string.Empty;
+    public int InvoiceCount { get; set; }
+    public decimal TotalInvoiced { get; set; }
+    public decimal TotalPaid { get; set; }
+    public decimal Outstanding { get; set; }
+}
+
+// ── Enterprise Tier Report DTOs ───────────────────────────────────────────────
+
+public class ComparativeProfitAndLossResponse
+{
+    public DateTime Period1From { get; set; }
+    public DateTime Period1To { get; set; }
+    public DateTime Period2From { get; set; }
+    public DateTime Period2To { get; set; }
+    public List<ComparativePnLLine> Revenue { get; set; } = new();
+    public List<ComparativePnLLine> CostOfSales { get; set; } = new();
+    public List<ComparativePnLLine> OperatingExpenses { get; set; } = new();
+    public List<ComparativePnLLine> FinanceCosts { get; set; } = new();
+    public decimal GrossProfit1 { get; set; }
+    public decimal GrossProfit2 { get; set; }
+    public decimal NetProfit1 { get; set; }
+    public decimal NetProfit2 { get; set; }
+}
+
+public class ComparativePnLLine
+{
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string SubType { get; set; } = string.Empty;
+    public decimal Period1 { get; set; }
+    public decimal Period2 { get; set; }
+    public decimal Variance { get; set; }
+}
+
+public class CashFlowStatementResponse
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public List<CashFlowLine> OperatingActivities { get; set; } = new();
+    public List<CashFlowLine> InvestingActivities { get; set; } = new();
+    public List<CashFlowLine> FinancingActivities { get; set; } = new();
+    public decimal NetOperatingCashFlow { get; set; }
+    public decimal NetInvestingCashFlow { get; set; }
+    public decimal NetFinancingCashFlow { get; set; }
+    public decimal NetCashFlow { get; set; }
+    public decimal OpeningCash { get; set; }
+    public decimal ClosingCash { get; set; }
+}
+
+public class CashFlowLine
+{
+    public string Description { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+}
+
+public class AccountActivitySummaryResponse
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public List<AccountActivityLine> Accounts { get; set; } = new();
+}
+
+public class AccountActivityLine
+{
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public List<MonthlyActivityLine> Months { get; set; } = new();
+    public decimal TotalDebits { get; set; }
+    public decimal TotalCredits { get; set; }
+    public decimal NetMovement { get; set; }
+}
+
+public class MonthlyActivityLine
+{
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public string MonthName { get; set; } = string.Empty;
+    public decimal Debits { get; set; }
+    public decimal Credits { get; set; }
+    public decimal Net { get; set; }
+}
+
+public class RevenueBreakdownResponse
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public List<RevenueBreakdownLine> Lines { get; set; } = new();
+    public decimal TotalRevenue { get; set; }
+}
+
+public class RevenueBreakdownLine
+{
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string SubType { get; set; } = string.Empty;
+    public int TransactionCount { get; set; }
+    public decimal SalesAmount { get; set; }
+    public decimal ReturnsAmount { get; set; }
+    public decimal NetAmount { get; set; }
+}
+
+public class DaybookAuditResponse
+{
+    public DateTime FromDate { get; set; }
+    public DateTime ToDate { get; set; }
+    public List<DaybookAuditLine> Entries { get; set; } = new();
+    public int TotalEntries { get; set; }
+    public int PostedEntries { get; set; }
+    public int DraftEntries { get; set; }
+}
+
+public class DaybookAuditLine
+{
+    public Guid EntryId { get; set; }
+    public string Type { get; set; } = string.Empty;
+    public string ReferenceNumber { get; set; } = string.Empty;
+    public string ExternalReference { get; set; } = string.Empty;
+    public DateTime EntryDate { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public bool IsPosted { get; set; }
+    public string CustomerName { get; set; } = string.Empty;
+    public string SupplierName { get; set; } = string.Empty;
+    public decimal TotalDebits { get; set; }
+    public decimal TotalCredits { get; set; }
+    public int LineCount { get; set; }
 }
