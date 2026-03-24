@@ -123,7 +123,10 @@ public class DaybookEntry
     [Required]
     [RegularExpression("^(Sales|SalesReturn|Purchase|PurchaseReturn|Journal|Bank|Receipt|Payment)$")]
     public string Type { get; set; } = string.Empty; // Sales, SalesReturn, Purchase, PurchaseReturn, Journal, Receipt, Payment
+    /// <summary>Auto-generated internal reference number (e.g. SI-0001)</summary>
     public string? ReferenceNumber { get; set; }
+    /// <summary>User-supplied external reference (e.g. supplier invoice number, customer PO)</summary>
+    public string? ExternalReference { get; set; }
     [Required]
     public DateTime EntryDate { get; set; }
     public string? Description { get; set; }
@@ -285,4 +288,15 @@ public class AccountBalance
 
     // Navigation properties
     public GLAccount? GLAccount { get; set; }
+}
+
+/// <summary>
+/// Tracks the last-used sequence number per organisation per daybook type,
+/// used to generate auto-incrementing internal reference numbers.
+/// </summary>
+public class DaybookSequence
+{
+    public Guid OrganisationId { get; set; }
+    public string EntryType { get; set; } = string.Empty;
+    public int LastNumber { get; set; }
 }

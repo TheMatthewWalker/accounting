@@ -323,6 +323,68 @@ class ApiService {
         return this.request(url);
     }
 
+    // Pro Tier Report Endpoints
+    static async getAgedDebtors(organisationId, asOfDate = null) {
+        let url = `${API_BASE_URL}/organisations/${organisationId}/reports/aged-debtors`;
+        if (asOfDate) url += `?asOfDate=${asOfDate}`;
+        return this.request(url);
+    }
+
+    static async getAgedCreditors(organisationId, asOfDate = null) {
+        let url = `${API_BASE_URL}/organisations/${organisationId}/reports/aged-creditors`;
+        if (asOfDate) url += `?asOfDate=${asOfDate}`;
+        return this.request(url);
+    }
+
+    static async getVatReturn(organisationId, fromDate, toDate) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/reports/vat-return?fromDate=${fromDate}&toDate=${toDate}`
+        );
+    }
+
+    static async getIncomeByCustomer(organisationId, fromDate, toDate) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/reports/income-by-customer?fromDate=${fromDate}&toDate=${toDate}`
+        );
+    }
+
+    static async getSpendBySupplier(organisationId, fromDate, toDate) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/reports/spend-by-supplier?fromDate=${fromDate}&toDate=${toDate}`
+        );
+    }
+
+    // Enterprise Tier Report Endpoints
+    static async getComparativeProfitAndLoss(organisationId, period1From, period1To, period2From, period2To) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/reports/comparative-pl?period1From=${period1From}&period1To=${period1To}&period2From=${period2From}&period2To=${period2To}`
+        );
+    }
+
+    static async getCashFlowStatement(organisationId, fromDate, toDate) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/reports/cash-flow?fromDate=${fromDate}&toDate=${toDate}`
+        );
+    }
+
+    static async getAccountActivitySummary(organisationId, fromDate, toDate) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/reports/account-activity?fromDate=${fromDate}&toDate=${toDate}`
+        );
+    }
+
+    static async getRevenueBreakdown(organisationId, fromDate, toDate) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/reports/revenue-breakdown?fromDate=${fromDate}&toDate=${toDate}`
+        );
+    }
+
+    static async getDaybookAudit(organisationId, fromDate, toDate) {
+        return this.request(
+            `${API_BASE_URL}/organisations/${organisationId}/reports/daybook-audit?fromDate=${fromDate}&toDate=${toDate}`
+        );
+    }
+
     // Customer Endpoints
     static async createCustomer(organisationId, customer) {
         return this.request(
